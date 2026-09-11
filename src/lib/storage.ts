@@ -33,6 +33,16 @@ export const DEFAULT_STANDINGS: FlightRecord[] = [
     assignedTier: 'The Asthmatic Sloth',
     recordedAt: '2026-09-11 18:15',
   },
+  {
+    id: 'flight-04',
+    fanCodename: 'Hostel Room 404 Overclocker',
+    pilotCallsign: 'Cadet Turboshake',
+    peakRpm: 412,
+    maxSpeedKmh: 55.8,
+    totalDistanceKm: 21.40,
+    assignedTier: 'CERN Hadron Fanblade',
+    recordedAt: '2026-09-11 21:10',
+  },
 ];
 
 export function getPersistedStandings(): FlightRecord[] {

@@ -39,6 +39,33 @@ import { missionAudio } from '@/lib/soundFx';
 
 type InputFeedMode = 'synthetic' | 'camera' | 'upload';
 
+// Explicit ROI / Target Pin Renderer with strict transform isolation
+function drawROI(ctx: CanvasRenderingContext2D, point: { x: number; y: number } | null | undefined, radius = 8) {
+  if (!point || point.x === undefined || point.y === undefined) return;
+
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(point.x, point.y, radius, 0, 2 * Math.PI, false);
+  ctx.fillStyle = '#00FFA3'; // Neon green target pin
+  ctx.shadowColor = 'rgba(0, 255, 163, 0.7)';
+  ctx.shadowBlur = 10;
+  ctx.fill();
+  ctx.lineWidth = 2;
+  ctx.strokeStyle = '#FFFFFF';
+  ctx.stroke();
+  
+  // Crosshair center
+  ctx.beginPath();
+  ctx.moveTo(point.x - 12, point.y);
+  ctx.lineTo(point.x + 12, point.y);
+  ctx.moveTo(point.x, point.y - 12);
+  ctx.lineTo(point.x, point.y + 12);
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+  ctx.restore();
+}
+
 export default function MissionControl() {
   // Video & Canvas Refs
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -68,8 +95,14 @@ export default function MissionControl() {
   const [bladeCount, setBladeCount] = useState<number>(3);
   const [riseThreshold, setRiseThreshold] = useState<number>(16.0);
   const [refractoryMs, setRefractoryMs] = useState<number>(60);
-  const [boxSize, setBoxSize] = useState<number>(16);
+  const [boxSize, setBoxSize] = useState<number>(20);
   const [showCalibration, setShowCalibration] = useState<boolean>(false);
+
+  // 2-Click Radius Calibration State
+  const [isCalibratingRadius, setIsCalibratingRadius] = useState<boolean>(false);
+  const [calCenter, setCalCenter] = useState<{ x: number; y: number } | null>(null);
+  const [calTip, setCalTip] = useState<{ x: number; y: number } | null>(null);
+  const [calRadiusPx, setCalRadiusPx] = useState<number | null>(null);
 
   // Audio Controls
   const [audioEnabled, setAudioEnabled] = useState<boolean>(true);
@@ -299,7 +332,7 @@ export default function MissionControl() {
     }
   };
 
-  // Canvas Click: Set ROI Coordinates
+  // Canvas Click: Set ROI Coordinates or 2-Click Radius Calibration
   const handleCanvasClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -308,6 +341,22 @@ export default function MissionControl() {
     const scaleY = canvas.height / rect.height;
     const x = Math.round((e.clientX - rect.left) * scaleX);
     const y = Math.round((e.clientY - rect.top) * scaleY);
+
+    if (isCalibratingRadius) {
+      if (!calCenter) {
+        setCalCenter({ x, y });
+        setSystemStatus(`CALIBRATION [1/2]: HUB SET [${x}, ${y}]. CLICK BLADE TIP`);
+      } else {
+        setCalTip({ x, y });
+        const radiusPx = Math.round(Math.hypot(x - calCenter.x, y - calCenter.y));
+        setCalRadiusPx(radiusPx);
+        setRoi({ x, y }); // Immediately lock optical sensor onto the outer blade tip
+        setIsCalibratingRadius(false);
+        setSystemStatus(`CALIBRATION LOCKED: RADIUS ${radiusPx}px. SENSOR ENGAGED`);
+      }
+      return;
+    }
+
     setRoi({ x, y });
     setSystemStatus(`TARGET LOCKED [${x}, ${y}]`);
   };
@@ -404,6 +453,10 @@ export default function MissionControl() {
           blade0Angle = videoAngleRef.current;
           pilotRadius = roi ? Math.hypot(roi.x - cx, roi.y - cy) : 126;
           activeRpm = telemetry.rpm || 0;
+        } else {
+          // Clear canvas cleanly when waiting for video or camera stream
+          ctx.fillStyle = '#030712';
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
         }
 
         // Optical Pulse Evaluation (Sampled BEFORE rendering pilot overlay to prevent interference)
@@ -443,55 +496,37 @@ export default function MissionControl() {
               return calculateKinematics(bladeDiameter, prev.cumulativeRotations + 1, currentRpm);
             });
           }
+        }
 
-          // Tactical Reticle Rendering
-          const halfBox = Math.floor(boxSize / 2);
-          ctx.save();
-          ctx.strokeStyle = pulseDetectedFlash ? '#10b981' : '#06b6d4';
-          ctx.lineWidth = pulseDetectedFlash ? 3 : 1.5;
+        // Target Optical Sensor Pin Marker (#00FFA3 neon pin with glow & crosshair)
+        if (roi) {
+          drawROI(ctx, roi, 8);
 
-          // Corner brackets
-          const bracketLen = Math.max(4, halfBox - 2);
-          // Top Left
-          ctx.beginPath();
-          ctx.moveTo(roi.x - halfBox, roi.y - halfBox + bracketLen);
-          ctx.lineTo(roi.x - halfBox, roi.y - halfBox);
-          ctx.lineTo(roi.x - halfBox + bracketLen, roi.y - halfBox);
-          ctx.stroke();
-          // Top Right
-          ctx.beginPath();
-          ctx.moveTo(roi.x + halfBox - bracketLen, roi.y - halfBox);
-          ctx.lineTo(roi.x + halfBox, roi.y - halfBox);
-          ctx.lineTo(roi.x + halfBox, roi.y - halfBox + bracketLen);
-          ctx.stroke();
-          // Bottom Left
-          ctx.beginPath();
-          ctx.moveTo(roi.x - halfBox, roi.y + halfBox - bracketLen);
-          ctx.lineTo(roi.x - halfBox, roi.y + halfBox);
-          ctx.lineTo(roi.x - halfBox + bracketLen, roi.y + halfBox);
-          ctx.stroke();
-          // Bottom Right
-          ctx.beginPath();
-          ctx.moveTo(roi.x + halfBox - bracketLen, roi.y + halfBox);
-          ctx.lineTo(roi.x + halfBox, roi.y + halfBox);
-          ctx.lineTo(roi.x + halfBox, roi.y + halfBox - bracketLen);
-          ctx.stroke();
-
-          // Center crosshair dot
-          ctx.beginPath();
-          ctx.arc(roi.x, roi.y, 2, 0, 2 * Math.PI);
-          ctx.fillStyle = pulseDetectedFlash ? '#34d399' : '#06b6d4';
-          ctx.fill();
-
-          // Pulse expansion ring animation
           if (pulseDetectedFlash) {
+            ctx.save();
             ctx.beginPath();
-            ctx.arc(roi.x, roi.y, halfBox + 8, 0, 2 * Math.PI);
-            ctx.strokeStyle = 'rgba(16, 185, 129, 0.7)';
+            ctx.arc(roi.x, roi.y, 16, 0, 2 * Math.PI);
+            ctx.strokeStyle = 'rgba(0, 255, 163, 0.8)';
             ctx.lineWidth = 2;
             ctx.stroke();
+            ctx.restore();
           }
+        }
 
+        // 2-Click Radius Calibration Markers & Dynamic Scale Line
+        if (calCenter) {
+          drawROI(ctx, calCenter, 6);
+        }
+        if (calCenter && calTip) {
+          drawROI(ctx, calTip, 6);
+          ctx.save();
+          ctx.beginPath();
+          ctx.moveTo(calCenter.x, calCenter.y);
+          ctx.lineTo(calTip.x, calTip.y);
+          ctx.strokeStyle = '#00FFA3';
+          ctx.lineWidth = 1.5;
+          ctx.setLineDash([4, 4]);
+          ctx.stroke();
           ctx.restore();
         }
 
@@ -543,7 +578,9 @@ export default function MissionControl() {
     calibrationMode, 
     bladeDiameter, 
     pulseDetectedFlash,
-    pilotScale
+    pilotScale,
+    calCenter,
+    calTip
   ]);
 
   // Render Frequency Oscillogram
@@ -1086,8 +1123,8 @@ export default function MissionControl() {
                 <span className="font-bold">Aperture Size</span>
                 <span className="text-emerald-400 font-bold">{boxSize}×{boxSize} px</span>
               </div>
-              <div className="grid grid-cols-4 gap-1">
-                {[8, 16, 24, 32].map((sz) => (
+              <div className="grid grid-cols-5 gap-1">
+                {[12, 16, 20, 24, 32].map((sz) => (
                   <button
                     key={sz}
                     onClick={() => setBoxSize(sz)}
@@ -1172,10 +1209,10 @@ export default function MissionControl() {
               />
             </div>
 
-            {/* Quick Reticle Preset Repositioners */}
-            <div className="mt-2 flex items-center justify-between text-[11px] text-zinc-400">
-              <span>Quick Reticle Reposition:</span>
+            {/* Quick Reticle Preset Repositioners & 2-Click Radius Calibration */}
+            <div className="mt-2 flex flex-wrap items-center justify-between text-[11px] text-zinc-400 gap-2">
               <div className="flex items-center gap-1.5">
+                <span>Presets:</span>
                 <button
                   onClick={() => setRoi({ x: 320, y: 180 })}
                   className="px-2 py-0.5 bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 rounded transition text-zinc-300"
@@ -1194,6 +1231,41 @@ export default function MissionControl() {
                 >
                   Top Blade Tip
                 </button>
+              </div>
+
+              {/* 2-Click Radius Calibrator */}
+              <div className="flex items-center gap-1.5">
+                <button
+                  onClick={() => {
+                    if (isCalibratingRadius) {
+                      setIsCalibratingRadius(false);
+                      setCalCenter(null);
+                      setCalTip(null);
+                      setSystemStatus('CALIBRATION CANCELLED');
+                    } else {
+                      setIsCalibratingRadius(true);
+                      setCalCenter(null);
+                      setCalTip(null);
+                      setSystemStatus('CALIBRATION [1/2]: CLICK CENTER OF FAN HUB');
+                    }
+                  }}
+                  className={`px-2.5 py-0.5 rounded border transition font-bold ${
+                    isCalibratingRadius
+                      ? 'bg-amber-950 border-amber-500 text-amber-300 animate-pulse'
+                      : 'bg-zinc-900 hover:bg-zinc-800 border-zinc-700 text-cyan-300'
+                  }`}
+                >
+                  {isCalibratingRadius
+                    ? calCenter
+                      ? 'Click 2: Blade Tip (Cancel)'
+                      : 'Click 1: Fan Hub (Cancel)'
+                    : 'Calibrate Radius (2 Clicks)'}
+                </button>
+                {calRadiusPx && (
+                  <span className="text-[10px] text-emerald-400 bg-emerald-950/60 px-2 py-0.5 rounded border border-emerald-800">
+                    Radius: {calRadiusPx}px
+                  </span>
+                )}
               </div>
             </div>
 

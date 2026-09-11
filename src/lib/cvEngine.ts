@@ -21,7 +21,7 @@ export function initTrackerState(refractoryPeriodMs = 60): LuminanceTrackerState
 export function sampleRoiLuma(
   ctx: CanvasRenderingContext2D,
   roi: { x: number; y: number },
-  boxSize = 16
+  boxSize = 20
 ): number {
   const half = Math.floor(boxSize / 2);
   const startX = Math.max(0, roi.x - half);
