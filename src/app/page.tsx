@@ -26,14 +26,17 @@ import {
   RefreshCw,
   Zap,
   Power,
-  UserPlus
+  UserPlus,
+  Layers,
+  Info,
+  Check
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
 import { KinematicsData, FlightRecord, TrackingRoi, CalibrationMode } from '@/lib/types';
 import { initTrackerState, sampleRoiLuma, evaluatePulse } from '@/lib/cvEngine';
 import { calculateKinematics } from '@/lib/kinematics';
-import { resolveTier } from '@/lib/characterMatrix';
+import { resolveTier, CHARACTER_TIERS } from '@/lib/characterMatrix';
 import { getPersistedStandings, saveFlightRecord, clearStandings, exportStandingsCsv } from '@/lib/storage';
 import { missionAudio } from '@/lib/soundFx';
 
@@ -901,42 +904,43 @@ export default function MissionControl() {
   };
 
   return (
-    <main className="min-h-screen bg-[#030712] text-zinc-100 p-4 md:p-6 lg:p-8 font-mono select-none">
-      {/* Top Aerospace Header */}
-      <header className="border-b border-cyan-900/40 pb-5 mb-6 flex flex-wrap justify-between items-center gap-4">
+    <main className="min-h-screen bg-[#030712] text-zinc-100 p-3 sm:p-5 md:p-6 lg:p-8 font-mono select-none hud-grid relative">
+      {/* Top Aerospace Mission Command Header */}
+      <header className="border-b border-cyan-900/40 pb-4 mb-6 flex flex-wrap justify-between items-center gap-4 bg-zinc-950/80 backdrop-blur-md p-4 rounded-xl border shadow-[0_0_30px_rgba(0,0,0,0.8)]">
         <div className="flex items-center gap-3.5">
-          <div className="p-3 bg-cyan-950/80 border border-cyan-500/50 rounded-lg text-cyan-400 shadow-[0_0_20px_rgba(6,182,212,0.3)]">
-            <Rocket className="w-7 h-7 animate-pulse" />
+          <div className="p-2.5 sm:p-3 bg-cyan-950/80 border border-cyan-500/50 rounded-xl text-cyan-400 shadow-[0_0_20px_rgba(6,182,212,0.35)] relative overflow-hidden group">
+            <Rocket className="w-6 h-6 sm:w-7 sm:h-7 animate-pulse relative z-10" />
+            <div className="absolute inset-0 bg-cyan-500/10 scale-0 group-hover:scale-100 transition-transform duration-500 rounded-xl" />
           </div>
           <div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-xl md:text-2xl lg:text-3xl font-black tracking-widest text-zinc-100 uppercase">
+            <div className="flex items-center gap-2 flex-wrap">
+              <h1 className="text-lg sm:text-xl md:text-2xl lg:text-3xl font-black tracking-widest text-zinc-100 uppercase text-glow-cyan">
                 PROJECT CEILING DRIFT
               </h1>
-              <span className="text-[10px] bg-cyan-950 text-cyan-400 border border-cyan-700/60 px-2 py-0.5 rounded font-bold">
-                v2.0 HUD
+              <span className="text-[10px] bg-cyan-950 text-cyan-300 border border-cyan-500/60 px-2 py-0.5 rounded-full font-bold shadow-[0_0_10px_rgba(6,182,212,0.2)]">
+                v2.4 TELEMETRY ONLINE
               </span>
             </div>
-            <p className="text-xs text-zinc-400 tracking-wider">
-              AERODYNAMIC TELEMETRY & ORBITAL DISPLACEMENT OPTICAL TACHOMETER
+            <p className="text-[11px] sm:text-xs text-zinc-400 tracking-wider">
+              AERODYNAMIC OPTICAL TACHOMETER & POINTLESS ORBITAL ODOMETRY MATRIX
             </p>
           </div>
         </div>
 
         {/* Global Controls & Status Bar */}
-        <div className="flex flex-wrap items-center gap-2.5 text-xs">
+        <div className="flex flex-wrap items-center gap-2 text-xs">
           {/* Mission Elapsed Time */}
-          <div className="bg-zinc-900/90 border border-zinc-700/70 px-3 py-1.5 rounded flex items-center gap-2">
-            <span className="text-zinc-500 font-bold">MET:</span>
-            <span className="text-cyan-400 font-black">{formatTime(missionElapsedTime)}</span>
+          <div className="bg-zinc-900/90 border border-zinc-750 px-3 py-1.5 rounded-lg flex items-center gap-2 shadow-inner">
+            <span className="text-zinc-500 font-bold text-[10px]">MET:</span>
+            <span className="text-cyan-300 font-black tracking-wider">{formatTime(missionElapsedTime)}</span>
           </div>
 
           {/* Sound Controls */}
-          <div className="flex items-center bg-zinc-900/90 border border-zinc-700/70 rounded px-2 py-1 gap-2">
+          <div className="flex items-center bg-zinc-900/90 border border-zinc-800 rounded-lg px-2.5 py-1.5 gap-2 shadow-inner">
             <button
               id="sfx-toggle-btn"
               onClick={() => setAudioEnabled(!audioEnabled)}
-              className="hover:text-cyan-300 transition flex items-center gap-1"
+              className="hover:text-cyan-300 transition flex items-center gap-1 font-bold"
               title="Toggle Audio FX"
             >
               {audioEnabled ? <Volume2 className="w-3.5 h-3.5 text-emerald-400" /> : <VolumeX className="w-3.5 h-3.5 text-rose-400" />}
@@ -945,14 +949,14 @@ export default function MissionControl() {
 
             {audioEnabled && (
               <>
-                <div className="h-3 w-px bg-zinc-700" />
+                <div className="h-3.5 w-px bg-zinc-700" />
                 <button
                   id="turbine-audio-btn"
                   onClick={() => setTurbineAudioEnabled(!turbineAudioEnabled)}
                   className={`text-[11px] px-1.5 py-0.5 rounded transition font-bold ${
                     turbineAudioEnabled ? 'bg-cyan-950 text-cyan-300 border border-cyan-600' : 'text-zinc-400 hover:text-zinc-200'
                   }`}
-                  title="Turbine drone sound follows live RPM pitch"
+                  title="Turbine drone sound pitch follows live RPM"
                 >
                   TURBINE: {turbineAudioEnabled ? 'ENGAGED' : 'IDLE'}
                 </button>
@@ -970,17 +974,17 @@ export default function MissionControl() {
             )}
           </div>
 
-          {/* Live Status Indicator */}
-          <div className="bg-zinc-900/90 border border-zinc-700/70 px-3 py-1.5 rounded flex items-center gap-2">
-            <span className={`w-2.5 h-2.5 rounded-full ${pulseDetectedFlash ? 'bg-emerald-400 scale-125' : 'bg-cyan-500 animate-ping'} transition-all`} />
-            <span className="text-zinc-300 font-bold">{systemStatus}</span>
+          {/* Live Sensor Status Indicator */}
+          <div className="bg-zinc-900/90 border border-zinc-800 px-3 py-1.5 rounded-lg flex items-center gap-2 shadow-inner">
+            <span className={`w-2.5 h-2.5 rounded-full ${pulseDetectedFlash ? 'bg-emerald-400 scale-125 shadow-[0_0_10px_#00FFA3]' : 'bg-cyan-500 animate-ping'} transition-all`} />
+            <span className="text-zinc-300 font-bold text-[11px]">{systemStatus}</span>
           </div>
 
-          {/* STOP FAN (E-STOP) */}
+          {/* Emergency Stop Button */}
           <button
             id="stop-fan-header-btn"
             onClick={handleStopFan}
-            className="bg-rose-950 hover:bg-rose-900 border border-rose-600/80 hover:border-rose-400 text-rose-200 px-3 py-1.5 rounded flex items-center gap-1.5 font-black transition shadow-[0_0_15px_rgba(244,63,94,0.35)]"
+            className="bg-rose-950 hover:bg-rose-900 border border-rose-600 hover:border-rose-400 text-rose-200 px-3.5 py-1.5 rounded-lg flex items-center gap-1.5 font-black transition shadow-[0_0_18px_rgba(244,63,94,0.35)] active:scale-95"
             title="Emergency Fan Brake / Stop Fan Immediately"
           >
             <Power className="w-3.5 h-3.5 text-rose-400" />
@@ -991,9 +995,9 @@ export default function MissionControl() {
           <button
             id="calibration-toggle-btn"
             onClick={() => setShowCalibration(!showCalibration)}
-            className={`px-3 py-1.5 rounded border transition flex items-center gap-1.5 font-bold ${
+            className={`px-3 py-1.5 rounded-lg border transition flex items-center gap-1.5 font-bold ${
               showCalibration 
-                ? 'bg-amber-950 border-amber-600 text-amber-300' 
+                ? 'bg-amber-950 border-amber-500 text-amber-300 shadow-[0_0_15px_rgba(245,158,11,0.25)]' 
                 : 'bg-zinc-900 hover:bg-zinc-800 border-zinc-700 text-zinc-300'
             }`}
           >
@@ -1003,43 +1007,43 @@ export default function MissionControl() {
         </div>
       </header>
 
-      {/* Camera Permission Alert Banner */}
+      {/* Camera Alert Banner */}
       {cameraError && (
-        <div className="mb-6 p-3 bg-rose-950/70 border border-rose-600/60 rounded-lg text-xs text-rose-200 flex items-center justify-between gap-4">
+        <div className="mb-6 p-3.5 bg-rose-950/80 border border-rose-600/70 rounded-xl text-xs text-rose-200 flex items-center justify-between gap-4 backdrop-blur-md shadow-lg">
           <div className="flex items-center gap-2">
             <ShieldAlert className="w-4 h-4 text-rose-400 shrink-0" />
             <span>{cameraError}</span>
           </div>
           <button
             onClick={() => setCameraError(null)}
-            className="text-zinc-400 hover:text-zinc-100 font-bold px-2 py-0.5 bg-zinc-900 rounded"
+            className="text-zinc-400 hover:text-zinc-100 font-bold px-2 py-0.5 bg-zinc-900 rounded border border-zinc-750"
           >
             Dismiss
           </button>
         </div>
       )}
 
-      {/* Calibration Panel Drawer */}
+      {/* Expandable Calibration Panel Drawer */}
       {showCalibration && (
-        <section className="mb-6 bg-zinc-950 border border-amber-500/30 rounded-lg p-4 shadow-[0_0_20px_rgba(245,158,11,0.08)]">
-          <div className="flex flex-wrap items-center justify-between pb-3 border-b border-zinc-800/80 mb-4 gap-2">
-            <div className="flex items-center gap-2 text-amber-400 font-bold text-xs uppercase">
+        <section className="mb-6 bg-zinc-950/95 border border-amber-500/40 rounded-xl p-5 shadow-[0_0_30px_rgba(245,158,11,0.12)] backdrop-blur-md">
+          <div className="flex flex-wrap items-center justify-between pb-3 border-b border-zinc-800 mb-4 gap-2">
+            <div className="flex items-center gap-2 text-amber-400 font-bold text-xs uppercase tracking-wider">
               <Sliders className="w-4 h-4" />
-              <span>Optical Receptor Calibration & Waveform Tuning</span>
+              <span>Optical Receptor Calibration & Waveform Tuning Drawer</span>
             </div>
-            <span className="text-[11px] text-zinc-500">Tune sensitivity to eliminate false positives in varied room lighting</span>
+            <span className="text-[11px] text-zinc-500">Fine-tune optical delta sensitivity to eliminate lighting false-positives</span>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-4 gap-6 text-xs">
-            {/* Blade Mode Selector */}
+            {/* Tracking Mode */}
             <div>
               <label className="block text-zinc-400 mb-1.5 font-bold">Tracking Mode</label>
               <div className="flex flex-col gap-1.5">
                 <button
                   onClick={() => setCalibrationMode('single_marker')}
-                  className={`text-left px-2.5 py-1.5 rounded border transition ${
+                  className={`text-left px-2.5 py-1.5 rounded-lg border transition ${
                     calibrationMode === 'single_marker'
-                      ? 'bg-cyan-950 border-cyan-500 text-cyan-300 font-bold'
+                      ? 'bg-cyan-950 border-cyan-500 text-cyan-300 font-bold shadow-[0_0_10px_rgba(6,182,212,0.2)]'
                       : 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:bg-zinc-800'
                   }`}
                 >
@@ -1047,9 +1051,9 @@ export default function MissionControl() {
                 </button>
                 <button
                   onClick={() => setCalibrationMode('symmetrical_blades')}
-                  className={`text-left px-2.5 py-1.5 rounded border transition ${
+                  className={`text-left px-2.5 py-1.5 rounded-lg border transition ${
                     calibrationMode === 'symmetrical_blades'
-                      ? 'bg-cyan-950 border-cyan-500 text-cyan-300 font-bold'
+                      ? 'bg-cyan-950 border-cyan-500 text-cyan-300 font-bold shadow-[0_0_10px_rgba(6,182,212,0.2)]'
                       : 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:bg-zinc-800'
                   }`}
                 >
@@ -1058,13 +1062,13 @@ export default function MissionControl() {
               </div>
 
               {calibrationMode === 'symmetrical_blades' && (
-                <div className="mt-2 flex items-center gap-2">
-                  <span className="text-zinc-500">Blades:</span>
+                <div className="mt-2.5 flex items-center gap-2">
+                  <span className="text-zinc-500 font-bold">Blades:</span>
                   {[3, 4, 5].map((cnt) => (
                     <button
                       key={cnt}
                       onClick={() => setBladeCount(cnt)}
-                      className={`px-2 py-0.5 rounded border text-xs font-bold ${
+                      className={`px-2.5 py-0.5 rounded border text-xs font-bold transition ${
                         bladeCount === cnt
                           ? 'bg-cyan-900 border-cyan-400 text-cyan-200'
                           : 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:bg-zinc-800'
@@ -1077,7 +1081,7 @@ export default function MissionControl() {
               )}
             </div>
 
-            {/* Threshold & Sensitivity Slider */}
+            {/* Threshold Sensitivity */}
             <div>
               <div className="flex justify-between text-zinc-400 mb-1.5">
                 <span className="font-bold">Delta Sensitivity</span>
@@ -1093,11 +1097,11 @@ export default function MissionControl() {
                 className="w-full h-1.5 accent-amber-400 bg-zinc-800 rounded cursor-pointer"
               />
               <span className="text-[10px] text-zinc-500 mt-1 block">
-                Lower = More sensitive (good for low contrast). Higher = Rejects room flickers.
+                Lower = More sensitive (low contrast). Higher = Rejects room lighting hum.
               </span>
             </div>
 
-            {/* Refractory Period Slider */}
+            {/* Refractory Lockout */}
             <div>
               <div className="flex justify-between text-zinc-400 mb-1.5">
                 <span className="font-bold">Refractory Lockout</span>
@@ -1117,7 +1121,7 @@ export default function MissionControl() {
               </span>
             </div>
 
-            {/* Sampling Aperture Box Size */}
+            {/* Aperture Size */}
             <div>
               <div className="flex justify-between text-zinc-400 mb-1.5">
                 <span className="font-bold">Aperture Size</span>
@@ -1128,9 +1132,9 @@ export default function MissionControl() {
                   <button
                     key={sz}
                     onClick={() => setBoxSize(sz)}
-                    className={`py-1 rounded border text-center font-bold ${
+                    className={`py-1 rounded border text-center font-bold transition ${
                       boxSize === sz
-                        ? 'bg-emerald-950 border-emerald-500 text-emerald-300'
+                        ? 'bg-emerald-950 border-emerald-500 text-emerald-300 shadow-[0_0_8px_rgba(16,185,129,0.3)]'
                         : 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:bg-zinc-800'
                     }`}
                   >
@@ -1138,47 +1142,144 @@ export default function MissionControl() {
                   </button>
                 ))}
               </div>
-
-              {/* Mini Luma Oscilloscope */}
-              <div className="mt-2">
-                <div className="flex justify-between text-[10px] text-zinc-500 mb-0.5">
-                  <span>LUMA SCOPE</span>
-                  <span className="text-amber-500">-- TRIGGER THRESHOLD</span>
-                </div>
-                <canvas
-                  ref={lumaScopeCanvasRef}
-                  width={200}
-                  height={32}
-                  className="w-full h-8 bg-black/60 rounded border border-zinc-800"
-                />
-              </div>
+              <span className="text-[10px] text-zinc-500 mt-1 block">
+                $20\times20$px perceptual luminance sampling patch.
+              </span>
             </div>
           </div>
         </section>
       )}
 
-      {/* Main Mission Grid */}
+      {/* PRIMARY COCKPIT TELEMETRY HUD STRIP */}
+      <section className="mb-6 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4">
+        {/* Metric 1: Rotational Velocity (RPM) */}
+        <div className="bg-zinc-950/90 border border-cyan-900/60 p-4 rounded-xl shadow-[0_0_20px_rgba(6,182,212,0.12)] relative overflow-hidden corner-brackets">
+          <div className="flex justify-between items-center text-zinc-400 mb-1">
+            <span className="text-[11px] uppercase tracking-wider font-bold flex items-center gap-1.5">
+              <RotateCw className="w-3.5 h-3.5 text-cyan-400" />
+              ROTATIONAL RPM
+            </span>
+            <span className="text-[10px] bg-cyan-950/80 text-cyan-300 border border-cyan-700/60 px-1.5 py-0.5 rounded font-bold">
+              PEAK: {peakSessionRpm || telemetry.rpm}
+            </span>
+          </div>
+          <div className="text-3xl sm:text-4xl lg:text-5xl font-black text-cyan-400 text-glow-cyan tracking-tight my-1">
+            {telemetry.rpm}
+          </div>
+          <div className="w-full bg-zinc-900 h-1.5 rounded-full overflow-hidden mt-2">
+            <div 
+              className="bg-gradient-to-r from-cyan-500 to-emerald-400 h-full transition-all duration-200" 
+              style={{ width: `${Math.min((telemetry.rpm / 450) * 100, 100)}%` }}
+            />
+          </div>
+        </div>
+
+        {/* Metric 2: Linear Peripheral Tip Speed */}
+        <div className="bg-zinc-950/90 border border-emerald-900/60 p-4 rounded-xl shadow-[0_0_20px_rgba(16,185,129,0.12)] relative overflow-hidden corner-brackets">
+          <div className="flex justify-between items-center text-zinc-400 mb-1">
+            <span className="text-[11px] uppercase tracking-wider font-bold flex items-center gap-1.5">
+              <Gauge className="w-3.5 h-3.5 text-emerald-400" />
+              TIP VELOCITY
+            </span>
+            <span className="text-[10px] text-zinc-500 font-bold">
+              {telemetry.linearVelocityMph} MPH
+            </span>
+          </div>
+          <div className="text-3xl sm:text-4xl lg:text-5xl font-black text-emerald-400 text-glow-emerald tracking-tight my-1">
+            {telemetry.linearVelocityKmh}
+            <span className="text-xs text-zinc-400 ml-1 font-normal">KM/H</span>
+          </div>
+          <div className="w-full bg-zinc-900 h-1.5 rounded-full overflow-hidden mt-2">
+            <div 
+              className="bg-emerald-500 h-full transition-all duration-200" 
+              style={{ width: `${Math.min((telemetry.linearVelocityKmh / 65) * 100, 100)}%` }}
+            />
+          </div>
+        </div>
+
+        {/* Metric 3: Pointless Odometry Distance */}
+        <div className="bg-zinc-950/90 border border-amber-900/60 p-4 rounded-xl shadow-[0_0_20px_rgba(245,158,11,0.12)] relative overflow-hidden corner-brackets">
+          <div className="flex justify-between items-center text-zinc-400 mb-1">
+            <span className="text-[11px] uppercase tracking-wider font-bold flex items-center gap-1.5">
+              <Compass className="w-3.5 h-3.5 text-amber-400" />
+              POINTLESS ODOMETRY
+            </span>
+            <span className="text-[10px] text-amber-400/80 font-bold">
+              {telemetry.cumulativeRotations} REVS
+            </span>
+          </div>
+          <div className="text-3xl sm:text-4xl lg:text-5xl font-black text-amber-400 text-glow-amber tracking-tight my-1">
+            {telemetry.totalDistanceMeters.toLocaleString()}
+            <span className="text-xs text-zinc-400 ml-1 font-normal">M</span>
+          </div>
+          <div className="text-[10px] text-zinc-400 font-bold mt-1">
+            {telemetry.totalDistanceKm} KM FLOWN IN PLACE
+          </div>
+        </div>
+
+        {/* Metric 4: Centripetal G-Force & Mach */}
+        <div className="bg-zinc-950/90 border border-purple-900/60 p-4 rounded-xl shadow-[0_0_20px_rgba(168,85,247,0.12)] relative overflow-hidden corner-brackets">
+          <div className="flex justify-between items-center text-zinc-400 mb-1">
+            <span className="text-[11px] uppercase tracking-wider font-bold flex items-center gap-1.5">
+              <Sparkles className="w-3.5 h-3.5 text-purple-400" />
+              G-FORCE STRESS
+            </span>
+            <span className="text-[10px] text-cyan-300 font-bold">
+              MACH {telemetry.machNumber}
+            </span>
+          </div>
+          <div className="text-3xl sm:text-4xl lg:text-5xl font-black text-purple-400 tracking-tight my-1">
+            {telemetry.centripetalG}
+            <span className="text-xs text-zinc-400 ml-1 font-normal">G</span>
+          </div>
+          <div className="text-[10px] text-zinc-400 font-bold mt-1">
+            {telemetry.centripetalG > 30 ? '⚠️ CRITICAL STRESS' : 'MOUNT INTEGRITY STABLE'}
+          </div>
+        </div>
+
+        {/* Metric 5: Lunar Transit Milestone */}
+        <div className="col-span-2 sm:col-span-1 md:col-span-2 lg:col-span-1 bg-zinc-950/90 border border-zinc-800 p-4 rounded-xl shadow-[0_0_20px_rgba(0,0,0,0.6)] relative overflow-hidden corner-brackets">
+          <div className="flex justify-between items-center text-zinc-400 mb-1">
+            <span className="text-[11px] uppercase tracking-wider font-bold flex items-center gap-1.5">
+              <Rocket className="w-3.5 h-3.5 text-cyan-300" />
+              MOON TRANSIT
+            </span>
+            <span className="text-[10px] text-zinc-500 font-bold">
+              {telemetry.everestClimbsEquivalent}x EVEREST
+            </span>
+          </div>
+          <div className="text-2xl sm:text-3xl lg:text-4xl font-black text-zinc-200 tracking-tight my-1 truncate">
+            {telemetry.moonProgressPct.toFixed(5)}%
+          </div>
+          <div className="text-[10px] text-zinc-500 font-bold mt-1">
+            TOWARDS 384,400 KM ORBIT
+          </div>
+        </div>
+      </section>
+
+      {/* MAIN MISSION GRID */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* Left Column: Optical Sensor Viewport & Simulation Controls */}
-        <div className="lg:col-span-7 flex flex-col gap-4">
-          <div className="bg-zinc-950 border border-zinc-800 rounded-lg p-4 shadow-[0_0_25px_rgba(0,0,0,0.6)]">
+        {/* Left Column: Optical Sensor Viewport & Waveform Suite */}
+        <div className="lg:col-span-7 flex flex-col gap-5">
+          {/* Tactical Viewport Container */}
+          <div className="bg-zinc-950/95 border border-zinc-800 rounded-xl p-4 sm:p-5 shadow-[0_0_30px_rgba(0,0,0,0.7)] backdrop-blur-md">
             <div className="flex flex-wrap justify-between items-center mb-3 text-xs gap-2">
-              <span className="text-zinc-300 flex items-center gap-1.5 font-bold">
-                <Crosshair className="w-4 h-4 text-cyan-400" />
+              <span className="text-zinc-200 flex items-center gap-2 font-black tracking-wider uppercase">
+                <Crosshair className="w-4 h-4 text-cyan-400 animate-spin-slow" />
                 OPTICAL SENSOR VIEWPORT
               </span>
-              <div className="flex items-center gap-3">
-                <span className="text-zinc-400 text-[11px]">
-                  {roi ? `TARGET: [X:${roi.x}, Y:${roi.y}]` : 'TARGET UNLOCKED (CLICK VIDEO)'}
+              <div className="flex items-center gap-2.5">
+                <span className="text-zinc-400 text-[11px] font-mono bg-zinc-900 px-2 py-0.5 rounded border border-zinc-800">
+                  {roi ? `LOCK: [X:${roi.x}, Y:${roi.y}]` : 'TARGET UNLOCKED (CLICK VIDEO)'}
                 </span>
-                <span className="text-[10px] bg-zinc-900 text-cyan-300 border border-zinc-700 px-2 py-0.5 rounded font-bold">
+                <span className="text-[10px] bg-cyan-950 text-cyan-300 border border-cyan-700/80 px-2.5 py-0.5 rounded-full font-bold">
                   MODE: {feedMode.toUpperCase()}
                 </span>
               </div>
             </div>
 
-            {/* Canvas Viewport */}
-            <div className="relative aspect-video bg-black rounded-lg border border-zinc-800 overflow-hidden flex items-center justify-center group">
+            {/* Canvas Viewport HUD Box */}
+            <div className="relative aspect-video bg-black rounded-xl border border-zinc-800 overflow-hidden flex items-center justify-center group shadow-2xl">
               <canvas
                 id="viewport-canvas"
                 ref={canvasRef}
@@ -1187,16 +1288,22 @@ export default function MissionControl() {
                 onClick={handleCanvasClick}
                 className="w-full h-full object-contain cursor-crosshair z-0"
               />
-              <div className="pointer-events-none absolute inset-0 scanlines opacity-40 z-10" />
+              <div className="pointer-events-none absolute inset-0 scanlines opacity-35 z-10" />
 
-              {/* Live Target Reticle Indicator overlay */}
+              {/* Viewport Corner Brackets */}
+              <div className="pointer-events-none absolute top-2 left-2 w-4 h-4 border-t-2 border-l-2 border-cyan-400/70 z-20" />
+              <div className="pointer-events-none absolute top-2 right-2 w-4 h-4 border-t-2 border-r-2 border-cyan-400/70 z-20" />
+              <div className="pointer-events-none absolute bottom-2 left-2 w-4 h-4 border-b-2 border-l-2 border-cyan-400/70 z-20" />
+              <div className="pointer-events-none absolute bottom-2 right-2 w-4 h-4 border-b-2 border-r-2 border-cyan-400/70 z-20" />
+
+              {/* Target Reticle Indicator Banner */}
               {roi && (
-                <div className="absolute top-2 left-2 z-20 pointer-events-none text-[10px] text-cyan-400/80 font-bold bg-black/50 px-2 py-0.5 rounded border border-cyan-900/50">
-                  RECEPTOR LOCK ACTIVE // CLICK TO REPOSITION
+                <div className="absolute top-3 left-4 z-20 pointer-events-none text-[10px] text-[#00FFA3] font-bold bg-black/70 px-2.5 py-1 rounded-md border border-[#00FFA3]/50 shadow-[0_0_12px_rgba(0,255,163,0.3)]">
+                  RECEPTOR LOCKED // CLICK TO REPOSITION
                 </div>
               )}
 
-              {/* Hidden Video Feed */}
+              {/* Hidden Video Tag */}
               <video
                 ref={videoRef}
                 src={videoSrc || undefined}
@@ -1209,32 +1316,32 @@ export default function MissionControl() {
               />
             </div>
 
-            {/* Quick Reticle Preset Repositioners & 2-Click Radius Calibration */}
-            <div className="mt-2 flex flex-wrap items-center justify-between text-[11px] text-zinc-400 gap-2">
+            {/* Tactical Presets & 2-Click Radius Calibration Bar */}
+            <div className="mt-3 flex flex-wrap items-center justify-between text-[11px] text-zinc-400 gap-2 pt-2 border-t border-zinc-900">
               <div className="flex items-center gap-1.5">
-                <span>Presets:</span>
+                <span className="font-bold text-zinc-500">Presets:</span>
                 <button
                   onClick={() => setRoi({ x: 320, y: 180 })}
-                  className="px-2 py-0.5 bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 rounded transition text-zinc-300"
+                  className="px-2 py-0.5 bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 hover:border-zinc-700 rounded transition text-zinc-300 font-bold"
                 >
                   Center Hub
                 </button>
                 <button
                   onClick={() => setRoi({ x: 410, y: 180 })}
-                  className="px-2 py-0.5 bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 rounded transition text-zinc-300"
+                  className="px-2 py-0.5 bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 hover:border-zinc-700 rounded transition text-zinc-300 font-bold"
                 >
                   Right Blade Tip
                 </button>
                 <button
                   onClick={() => setRoi({ x: 320, y: 90 })}
-                  className="px-2 py-0.5 bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 rounded transition text-zinc-300"
+                  className="px-2 py-0.5 bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 hover:border-zinc-700 rounded transition text-zinc-300 font-bold"
                 >
                   Top Blade Tip
                 </button>
               </div>
 
-              {/* 2-Click Radius Calibrator */}
-              <div className="flex items-center gap-1.5">
+              {/* 2-Click Radius Calibration Tool */}
+              <div className="flex items-center gap-2">
                 <button
                   onClick={() => {
                     if (isCalibratingRadius) {
@@ -1249,10 +1356,10 @@ export default function MissionControl() {
                       setSystemStatus('CALIBRATION [1/2]: CLICK CENTER OF FAN HUB');
                     }
                   }}
-                  className={`px-2.5 py-0.5 rounded border transition font-bold ${
+                  className={`px-3 py-1 rounded-lg border transition font-black text-xs ${
                     isCalibratingRadius
-                      ? 'bg-amber-950 border-amber-500 text-amber-300 animate-pulse'
-                      : 'bg-zinc-900 hover:bg-zinc-800 border-zinc-700 text-cyan-300'
+                      ? 'bg-amber-950 border-amber-500 text-amber-300 animate-pulse shadow-[0_0_12px_rgba(245,158,11,0.3)]'
+                      : 'bg-zinc-900 hover:bg-zinc-800 border-zinc-750 text-cyan-300 hover:border-cyan-500'
                   }`}
                 >
                   {isCalibratingRadius
@@ -1262,17 +1369,17 @@ export default function MissionControl() {
                     : 'Calibrate Radius (2 Clicks)'}
                 </button>
                 {calRadiusPx && (
-                  <span className="text-[10px] text-emerald-400 bg-emerald-950/60 px-2 py-0.5 rounded border border-emerald-800">
+                  <span className="text-[10px] text-[#00FFA3] bg-emerald-950/70 px-2 py-0.5 rounded border border-[#00FFA3]/40 font-bold shadow-[0_0_8px_rgba(0,255,163,0.2)]">
                     Radius: {calRadiusPx}px
                   </span>
                 )}
               </div>
             </div>
 
-            {/* Optical Sensor Inputs & Controls Toolbar */}
+            {/* Input Feeds & Span Controls Toolbar */}
             <div className="mt-4 pt-3 border-t border-zinc-900 flex flex-wrap gap-2.5 items-center justify-between text-xs">
               <div className="flex flex-wrap items-center gap-2">
-                {/* Live Webcam Engagement */}
+                {/* Webcam Button */}
                 <button
                   id="webcam-toggle-btn"
                   onClick={() => {
@@ -1283,10 +1390,10 @@ export default function MissionControl() {
                       startCameraStream(cameraFacing);
                     }
                   }}
-                  className={`px-3 py-1.5 rounded flex items-center gap-1.5 font-bold transition border ${
+                  className={`px-3 py-1.5 rounded-lg flex items-center gap-1.5 font-bold transition border ${
                     feedMode === 'camera'
-                      ? 'bg-rose-950 border-rose-600 text-rose-300'
-                      : 'bg-cyan-950 hover:bg-cyan-900 border-cyan-600/60 text-cyan-300 shadow-[0_0_12px_rgba(6,182,212,0.15)]'
+                      ? 'bg-rose-950 border-rose-600 text-rose-300 shadow-[0_0_12px_rgba(244,63,94,0.3)]'
+                      : 'bg-cyan-950 hover:bg-cyan-900 border-cyan-600/70 text-cyan-300 shadow-[0_0_15px_rgba(6,182,212,0.2)]'
                   }`}
                 >
                   {feedMode === 'camera' ? <CameraOff className="w-4 h-4" /> : <Camera className="w-4 h-4" />}
@@ -1300,8 +1407,8 @@ export default function MissionControl() {
                       setCameraFacing(nextFacing);
                       startCameraStream(nextFacing);
                     }}
-                    className="bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-zinc-300 px-2.5 py-1.5 rounded flex items-center gap-1 transition font-bold"
-                    title="Flip camera between environment and front"
+                    className="bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-zinc-300 px-2.5 py-1.5 rounded-lg flex items-center gap-1 transition font-bold"
+                    title="Flip camera between rear and front"
                   >
                     <RefreshCw className="w-3.5 h-3.5 text-cyan-400" />
                     <span>Flip: {cameraFacing === 'environment' ? 'Back' : 'Front'}</span>
@@ -1309,26 +1416,26 @@ export default function MissionControl() {
                 )}
 
                 {/* Upload MP4 Video */}
-                <label className="flex items-center gap-1.5 cursor-pointer bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 px-3 py-1.5 rounded transition text-zinc-300 font-bold">
+                <label className="flex items-center gap-1.5 cursor-pointer bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 hover:border-zinc-600 px-3 py-1.5 rounded-lg transition text-zinc-300 font-bold">
                   <Upload className="w-3.5 h-3.5 text-cyan-400" />
                   <span>Upload Video</span>
                   <input type="file" accept="video/mp4,video/webm" onChange={handleFileUpload} className="hidden" />
                 </label>
 
-                {/* Switch to Synthetic Matrix */}
+                {/* Switch to Synthetic Simulation */}
                 {feedMode !== 'synthetic' && (
                   <button
                     onClick={handleSwitchToSynthetic}
-                    className="bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-zinc-300 px-3 py-1.5 rounded transition font-bold"
+                    className="bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 hover:border-zinc-600 text-zinc-300 px-3 py-1.5 rounded-lg transition font-bold"
                   >
                     Simulation Mode
                   </button>
                 )}
               </div>
 
-              {/* Blade Diameter Input */}
-              <div className="flex items-center gap-2 text-zinc-300 bg-zinc-900/80 px-2.5 py-1 rounded border border-zinc-800">
-                <span className="text-zinc-500 font-bold">Span:</span>
+              {/* Blade Diameter Physical Span */}
+              <div className="flex items-center gap-2 text-zinc-300 bg-zinc-900/90 px-3 py-1.5 rounded-lg border border-zinc-800 shadow-inner">
+                <span className="text-zinc-500 font-bold text-[11px]">Fan Span:</span>
                 <input
                   id="span-input"
                   type="number"
@@ -1343,11 +1450,11 @@ export default function MissionControl() {
                   }}
                   className="w-14 bg-zinc-950 border border-zinc-700 px-1.5 py-0.5 rounded text-cyan-300 font-bold text-center focus:outline-none focus:border-cyan-500"
                 />
-                <span className="text-zinc-500 font-bold">m</span>
+                <span className="text-zinc-500 font-bold text-xs">m</span>
               </div>
             </div>
 
-            {/* Video Play/Pause Control (if uploaded) */}
+            {/* Video Play/Pause Control (if uploaded video) */}
             {feedMode === 'upload' && videoSrc && (
               <div className="mt-3 pt-3 border-t border-zinc-900 flex items-center justify-between">
                 <button
@@ -1363,7 +1470,7 @@ export default function MissionControl() {
                       }
                     }
                   }}
-                  className="bg-emerald-950 hover:bg-emerald-900 border border-emerald-600 text-emerald-300 px-4 py-1.5 rounded flex items-center gap-2 transition text-xs font-bold"
+                  className="bg-emerald-950 hover:bg-emerald-900 border border-emerald-600 text-emerald-300 px-4 py-1.5 rounded-lg flex items-center gap-2 transition text-xs font-black shadow-[0_0_12px_rgba(16,185,129,0.25)]"
                 >
                   {isProcessing ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5" />}
                   <span>{isProcessing ? 'Halt Telemetry' : 'Commence Analysis'}</span>
@@ -1373,217 +1480,69 @@ export default function MissionControl() {
             )}
           </div>
 
-          {/* Synthetic Simulation Controls (When in Synthetic Mode) */}
-          {feedMode === 'synthetic' && (
-            <div className="bg-zinc-950 border border-cyan-950/70 rounded-lg p-4">
-              <div className="flex justify-between items-center mb-2.5 text-xs">
+          {/* Dual Channel Waveform & Oscilloscope Deck */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Channel 1: Telemetry Frequency Oscillogram */}
+            <div className="bg-zinc-950/95 border border-zinc-800 rounded-xl p-4 shadow-[0_0_20px_rgba(0,0,0,0.6)] backdrop-blur-md">
+              <div className="flex justify-between items-center mb-2 text-xs">
                 <span className="text-zinc-300 flex items-center gap-1.5 font-bold">
-                  <Zap className="w-4 h-4 text-cyan-400" />
-                  SYNTHETIC FAN MOTOR CONTROLS
+                  <Activity className="w-4 h-4 text-cyan-400" />
+                  PULSE FREQUENCY WAVE
                 </span>
-                <span className="text-cyan-400 font-black">{syntheticTargetRpm} RPM TARGET</span>
+                <span className="text-cyan-400 font-bold text-[11px]">{telemetry.rpm} RPM</span>
               </div>
-
-              <div className="flex items-center gap-3">
-                <input
-                  type="range"
-                  min="0"
-                  max="450"
-                  step="5"
-                  value={syntheticTargetRpm}
-                  onChange={(e) => setSyntheticTargetRpm(parseInt(e.target.value, 10))}
-                  className="w-full h-2 accent-cyan-400 bg-zinc-800 rounded cursor-pointer"
-                />
-              </div>
-
-              {/* Speed Presets & Blade Configuration */}
-              <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-xs">
-                <div className="flex items-center gap-1.5">
-                  <span className="text-zinc-500 text-[11px]">Presets:</span>
-                  {[
-                    { label: 'Idle', rpm: 0 },
-                    { label: 'Breeze', rpm: 60 },
-                    { label: 'Standard', rpm: 180 },
-                    { label: 'Jet Mode', rpm: 290 },
-                    { label: 'Hadron', rpm: 390 },
-                  ].map((p) => (
-                    <button
-                      key={p.label}
-                      onClick={() => setSyntheticTargetRpm(p.rpm)}
-                      className={`px-2 py-0.5 rounded text-[11px] font-bold border transition ${
-                        syntheticTargetRpm === p.rpm
-                          ? 'bg-cyan-900 border-cyan-400 text-cyan-200'
-                          : 'bg-zinc-900 hover:bg-zinc-800 border-zinc-800 text-zinc-400'
-                      }`}
-                    >
-                      {p.label}
-                    </button>
-                  ))}
-                  <button
-                    id="stop-fan-panel-btn"
-                    onClick={handleStopFan}
-                    className="px-2.5 py-0.5 rounded text-[11px] font-black border transition bg-rose-950 border-rose-500 text-rose-300 hover:bg-rose-900 flex items-center gap-1 shadow-[0_0_8px_rgba(244,63,94,0.3)]"
-                    title="Stop fan instantly"
-                  >
-                    <Power className="w-3 h-3 text-rose-400" />
-                    <span>STOP FAN</span>
-                  </button>
-                </div>
-
-                <div className="flex items-center gap-1.5">
-                  <span className="text-zinc-500 text-[11px]">Synthetic Blades:</span>
-                  {[3, 4, 5].map((cnt) => (
-                    <button
-                      key={cnt}
-                      onClick={() => setSyntheticBladeCount(cnt)}
-                      className={`px-2 py-0.5 rounded text-[11px] font-bold border transition ${
-                        syntheticBladeCount === cnt
-                          ? 'bg-pink-950 border-pink-500 text-pink-300'
-                          : 'bg-zinc-900 hover:bg-zinc-800 border-zinc-800 text-zinc-400'
-                      }`}
-                    >
-                      {cnt}
-                    </button>
-                  ))}
-                </div>
+              <canvas 
+                ref={graphCanvasRef} 
+                width={540} 
+                height={75} 
+                className="w-full h-20 bg-black/80 rounded-lg border border-zinc-800/80 shadow-inner" 
+              />
+              <div className="mt-1 flex justify-between text-[10px] text-zinc-500">
+                <span>TIME DOMAIN (RECENT 30 SAMPLES)</span>
+                <span>PEAK: <strong className="text-amber-400 font-mono">{peakSessionRpm} RPM</strong></span>
               </div>
             </div>
-          )}
 
-          {/* Fan Leaf Passenger / Custom Picture Customizer Card */}
-          <div className="bg-zinc-950 border border-purple-950/70 rounded-lg p-4 shadow-[0_0_15px_rgba(168,85,247,0.06)]">
-            <div className="flex flex-wrap items-center justify-between gap-2 mb-3 text-xs">
-              <div className="flex items-center gap-2 text-purple-400 font-bold">
-                <UserPlus className="w-4 h-4" />
-                <span className="uppercase tracking-wider">Fan Leaf Passenger / Custom Picture</span>
+            {/* Channel 2: Real-time Luminance Trigger Scope */}
+            <div className="bg-zinc-950/95 border border-zinc-800 rounded-xl p-4 shadow-[0_0_20px_rgba(0,0,0,0.6)] backdrop-blur-md">
+              <div className="flex justify-between items-center mb-2 text-xs">
+                <span className="text-zinc-300 flex items-center gap-1.5 font-bold">
+                  <Sliders className="w-4 h-4 text-emerald-400" />
+                  OPTICAL TRIGGER SCOPE
+                </span>
+                <span className="text-amber-400 font-bold text-[10px]">-- TRIGGER Δ {riseThreshold}</span>
               </div>
-              <span className="text-[11px] text-zinc-500">Clings to outer tip of blade #0</span>
-            </div>
-
-            <div className="flex flex-wrap items-center gap-4 text-xs">
-              {/* Passenger Avatar Thumbnail */}
-              <div className="w-14 h-14 rounded-lg bg-zinc-900 border border-zinc-700 flex items-center justify-center overflow-hidden p-1 shrink-0 relative">
-                <img
-                  src={customPilotUrl}
-                  alt="Blade Passenger"
-                  className="w-full h-full object-contain"
-                />
-              </div>
-
-              <div className="flex-1 flex flex-col gap-2.5">
-                <div className="flex flex-wrap items-center gap-2">
-                  {/* Upload Custom Picture Button */}
-                  <label className="bg-purple-950 hover:bg-purple-900 border border-purple-600/70 text-purple-200 px-3 py-1.5 rounded cursor-pointer flex items-center gap-1.5 font-bold transition shadow-[0_0_12px_rgba(168,85,247,0.15)]">
-                    <Upload className="w-3.5 h-3.5 text-purple-400" />
-                    <span>Upload Leaf Picture</span>
-                    <input
-                      type="file"
-                      accept="image/*"
-                      onChange={handleCustomPilotUpload}
-                      className="hidden"
-                    />
-                  </label>
-
-                  {/* Reset to Default Picture */}
-                  <button
-                    onClick={handleResetPilotPic}
-                    className="bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-zinc-400 hover:text-zinc-200 px-2.5 py-1.5 rounded transition text-[11px] font-bold"
-                  >
-                    Reset Pic
-                  </button>
-
-                  {/* Quick Projector Size Presets */}
-                  <div className="flex flex-wrap items-center gap-1 bg-zinc-900/90 border border-zinc-800 p-1 rounded">
-                    <span className="text-[10px] text-zinc-400 px-1 font-bold">PROJECTOR ZOOM:</span>
-                    {[
-                      { label: 'Normal (1x)', scale: 1.0 },
-                      { label: 'Large (1.5x)', scale: 1.5 },
-                      { label: '📽️ Projector (2.0x)', scale: 2.0 },
-                      { label: 'Jumbo (2.5x)', scale: 2.5 },
-                    ].map((sz) => (
-                      <button
-                        key={sz.label}
-                        onClick={() => setPilotScale(sz.scale)}
-                        className={`px-2 py-0.5 rounded text-[10px] font-black transition ${
-                          pilotScale === sz.scale
-                            ? 'bg-purple-900 border border-purple-400 text-purple-100 shadow-[0_0_8px_rgba(168,85,247,0.4)]'
-                            : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800'
-                        }`}
-                      >
-                        {sz.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="flex flex-wrap items-center justify-between gap-3 text-[11px] text-zinc-400 pt-1.5 border-t border-zinc-900">
-                  <div className="flex items-center gap-2">
-                    <span className="text-zinc-400 font-bold">Custom Zoom:</span>
-                    <input
-                      type="range"
-                      min="0.8"
-                      max="2.8"
-                      step="0.1"
-                      value={pilotScale}
-                      onChange={(e) => setPilotScale(parseFloat(e.target.value))}
-                      className="w-28 h-1.5 accent-purple-400 bg-zinc-850 rounded cursor-pointer"
-                      title="Adjust passenger photo scale for projector visibility"
-                    />
-                    <span className="text-purple-300 font-black text-xs">{(pilotScale * 100).toFixed(0)}%</span>
-                  </div>
-
-                  <label className="flex items-center gap-1.5 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={autoRemoveBg}
-                      onChange={(e) => setAutoRemoveBg(e.target.checked)}
-                      className="rounded bg-zinc-800 border-zinc-700 accent-purple-500"
-                    />
-                    <span>Auto-Remove Background</span>
-                  </label>
-                </div>
+              <canvas
+                ref={lumaScopeCanvasRef}
+                width={540}
+                height={75}
+                className="w-full h-20 bg-black/80 rounded-lg border border-zinc-800/80 shadow-inner"
+              />
+              <div className="mt-1 flex justify-between text-[10px] text-zinc-500">
+                <span>LUMA HISTOGRAM (60 FRAMES)</span>
+                <span className="text-emerald-400 font-mono">SENSOR APERTURE: {boxSize}px</span>
               </div>
             </div>
-          </div>
-
-          {/* Telemetry Frequency Oscillogram */}
-          <div className="bg-zinc-950 border border-zinc-800 rounded-lg p-4 shadow-[0_0_15px_rgba(0,0,0,0.5)]">
-            <div className="flex justify-between items-center mb-2 text-xs">
-              <span className="text-zinc-300 flex items-center gap-1.5 font-bold">
-                <Activity className="w-4 h-4 text-cyan-400" />
-                FREQUENCY OSCILLOGRAM
-              </span>
-              <div className="flex items-center gap-3">
-                <span className="text-zinc-500">PEAK: <strong className="text-amber-400">{peakSessionRpm} RPM</strong></span>
-                <span className="text-cyan-400 font-bold">{telemetry.rpm} RPM CURRENT</span>
-              </div>
-            </div>
-            <canvas 
-              ref={graphCanvasRef} 
-              width={540} 
-              height={75} 
-              className="w-full h-18 bg-black/70 rounded border border-zinc-800/80" 
-            />
           </div>
         </div>
 
         {/* Right Column: Aerospace Gauges & Mission Telemetry */}
-        <div className="lg:col-span-5 flex flex-col gap-4">
+        <div className="lg:col-span-5 flex flex-col gap-5">
           {/* Radial SVG Tachometer Gauge Card */}
-          <div className="bg-zinc-950 border border-zinc-800 p-5 rounded-lg shadow-[0_0_20px_rgba(0,0,0,0.5)] relative overflow-hidden">
+          <div className="bg-zinc-950/95 border border-zinc-800 p-5 rounded-xl shadow-[0_0_30px_rgba(0,0,0,0.7)] backdrop-blur-md relative overflow-hidden">
             <div className="flex justify-between items-center mb-1">
-              <span className="text-xs text-zinc-400 flex items-center gap-1 font-bold">
+              <span className="text-xs text-zinc-300 flex items-center gap-1.5 font-black uppercase tracking-wider">
                 <RotateCw className="w-3.5 h-3.5 text-cyan-400" />
                 ROTATIONAL VELOCITY TACHOMETER
               </span>
-              <span className="text-[10px] bg-zinc-900 text-zinc-400 border border-zinc-700/80 px-2 py-0.5 rounded font-bold">
+              <span className="text-[10px] bg-zinc-900 text-zinc-400 border border-zinc-700/80 px-2 py-0.5 rounded-full font-bold">
                 ACCURACY: 99.4%
               </span>
             </div>
 
             {/* Radial Tachometer Dial Display */}
             <div className="relative flex flex-col items-center justify-center my-3">
-              <svg viewBox="0 0 200 120" className="w-56 h-32 overflow-visible">
+              <svg viewBox="0 0 200 120" className="w-64 h-36 overflow-visible">
                 {/* Background Arc */}
                 <path
                   d="M 20 105 A 80 80 0 0 1 180 105"
@@ -1642,136 +1601,290 @@ export default function MissionControl() {
                 </defs>
               </svg>
 
-              <div className="text-center -mt-4">
-                <div id="rpm-display" className="text-5xl font-black text-cyan-400 tracking-tight drop-shadow-[0_0_15px_rgba(6,182,212,0.4)]">
+              <div className="text-center -mt-3">
+                <div id="rpm-display" className="text-5xl sm:text-6xl font-black text-cyan-400 text-glow-cyan tracking-tight">
                   {telemetry.rpm}
                 </div>
-                <div className="text-[11px] text-zinc-400 font-bold uppercase tracking-wider">
+                <div className="text-[11px] text-zinc-400 font-bold uppercase tracking-wider mt-1">
                   REVOLUTIONS / MINUTE
                 </div>
               </div>
             </div>
           </div>
 
-          {/* Aerodynamic Speed & G-Force Twin Cards */}
-          <div className="grid grid-cols-2 gap-4">
-            {/* Linear Tip Speed */}
-            <div className="bg-zinc-950 border border-zinc-800 p-4 rounded-lg shadow-[0_0_15px_rgba(0,0,0,0.5)]">
-              <span className="text-xs text-zinc-400 flex items-center gap-1 font-bold">
-                <Gauge className="w-3.5 h-3.5 text-emerald-400" />
-                PERIPHERAL SPEED
+          {/* Aerodynamic Hazard Tier & Diploma Trigger Card */}
+          <div className="bg-zinc-950/95 border border-cyan-900/60 p-5 rounded-xl shadow-[0_0_30px_rgba(6,182,212,0.15)] relative overflow-hidden backdrop-blur-md">
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-1.5 text-[11px] uppercase text-cyan-400 font-black tracking-wider">
+                <ShieldAlert className="w-4 h-4" />
+                <span>RATING: {activeTier.hazardLevel}</span>
+              </div>
+              <span className="text-[10px] text-zinc-500 font-mono bg-zinc-900 px-2 py-0.5 rounded border border-zinc-800">
+                CALLSIGN: {activeTier.callsign}
               </span>
-              <div className="my-2">
-                <div id="speed-display" className="text-3xl font-black text-emerald-400 drop-shadow-[0_0_10px_rgba(16,185,129,0.4)]">
-                  {telemetry.linearVelocityKmh}
-                </div>
-                <div className="text-[10px] text-zinc-500 font-bold">KM/H // {telemetry.linearVelocityMph} MPH</div>
-              </div>
-              <div className="w-full bg-zinc-900 h-1.5 rounded overflow-hidden">
-                <div 
-                  className="bg-emerald-500 h-full transition-all duration-200" 
-                  style={{ width: `${Math.min((telemetry.linearVelocityKmh / 65) * 100, 100)}%` }} 
-                />
-              </div>
-            </div>
-
-            {/* Centripetal G-Force Stress Gauge */}
-            <div className="bg-zinc-950 border border-zinc-800 p-4 rounded-lg shadow-[0_0_15px_rgba(0,0,0,0.5)]">
-              <span className="text-xs text-zinc-400 flex items-center gap-1 font-bold">
-                <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-                CENTRIPETAL G-FORCE
-              </span>
-              <div className="my-2">
-                <div id="gforce-display" className="text-3xl font-black text-amber-400 drop-shadow-[0_0_10px_rgba(245,158,11,0.4)]">
-                  {telemetry.centripetalG} G
-                </div>
-                <div className="text-[10px] text-zinc-500 font-bold">
-                  {telemetry.centripetalG > 30 ? 'CRITICAL BLADE STRESS' : 'MOUNT INTEGRITY OK'}
-                </div>
-              </div>
-              <div className="w-full bg-zinc-900 h-1.5 rounded overflow-hidden">
-                <div 
-                  className={`h-full transition-all duration-200 ${
-                    telemetry.centripetalG > 30 ? 'bg-rose-500' : 'bg-amber-500'
-                  }`} 
-                  style={{ width: `${Math.min((telemetry.centripetalG / 50) * 100, 100)}%` }} 
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Pointless Odometry Progression Card */}
-          <div className="bg-zinc-950 border border-zinc-800 p-4 rounded-lg">
-            <div className="flex justify-between items-center mb-2">
-              <span className="text-xs text-zinc-400 flex items-center gap-1.5 font-bold">
-                <Compass className="w-4 h-4 text-amber-400" />
-                ACCUMULATED POINTLESS ODOMETRY
-              </span>
-              <span className="text-[10px] text-zinc-500 font-bold">{telemetry.cumulativeRotations} ROTATIONS</span>
-            </div>
-
-            <div className="flex items-baseline gap-2">
-              <span id="meters-display" className="text-4xl font-black text-amber-400 drop-shadow-[0_0_12px_rgba(245,158,11,0.3)]">
-                {telemetry.totalDistanceMeters}
-              </span>
-              <span className="text-xs text-zinc-500 font-bold">METERS FLOWN IN PLACE</span>
-            </div>
-
-            <div className="mt-3 grid grid-cols-3 gap-2 text-xs border-t border-zinc-800/80 pt-3 text-zinc-400">
-              <div>
-                <span className="text-zinc-500 text-[10px] block">Everest Climbs:</span>
-                <span className="text-zinc-200 font-bold">{telemetry.everestClimbsEquivalent} summits</span>
-              </div>
-              <div>
-                <span className="text-zinc-500 text-[10px] block">Lunar Transit:</span>
-                <span className="text-cyan-400 font-bold">{telemetry.moonProgressPct.toFixed(6)}%</span>
-              </div>
-              <div>
-                <span className="text-zinc-500 text-[10px] block">Mach Number:</span>
-                <span className="text-emerald-400 font-bold">M {telemetry.machNumber}</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Aerodynamic Hazard Tier & Certificate Trigger */}
-          <div className="bg-zinc-950 border border-cyan-900/40 p-4 rounded-lg relative overflow-hidden">
-            <div className="flex items-center justify-between mb-1">
-              <div className="flex items-center gap-1 text-[10px] uppercase text-cyan-400 font-bold">
-                <ShieldAlert className="w-3.5 h-3.5" />
-                <span>Aero Rating: {activeTier.hazardLevel}</span>
-              </div>
-              <span className="text-[10px] text-zinc-500 font-mono">CALLSIGN: {activeTier.callsign}</span>
             </div>
             
-            <h3 id="tier-title" className="text-lg font-black text-zinc-100">{activeTier.title}</h3>
+            <h3 id="tier-title" className="text-xl font-black text-zinc-100 tracking-wide">{activeTier.title}</h3>
             <p className="text-xs text-zinc-400 mt-1 italic">"{activeTier.description}"</p>
 
             <button 
               id="log-flight-btn"
               onClick={handleOpenCertificateModal}
-              className="mt-4 w-full bg-cyan-950 hover:bg-cyan-900 border border-cyan-600/60 hover:border-cyan-400 text-xs py-2.5 rounded text-cyan-200 transition font-bold flex items-center justify-center gap-2 shadow-[0_0_15px_rgba(6,182,212,0.2)]"
+              className="mt-4 w-full bg-cyan-950 hover:bg-cyan-900 border border-cyan-500 hover:border-cyan-400 text-xs py-3 rounded-xl text-cyan-200 transition font-black flex items-center justify-center gap-2 shadow-[0_0_20px_rgba(6,182,212,0.3)] hover:scale-[1.01] active:scale-98"
             >
               <Award className="w-4 h-4 text-cyan-400" />
               <span>Log Mission & Issue Flight Diploma</span>
             </button>
           </div>
+
+          {/* Synthetic Motor Controls Deck */}
+          {feedMode === 'synthetic' && (
+            <div className="bg-zinc-950/95 border border-cyan-950/80 rounded-xl p-5 shadow-[0_0_20px_rgba(0,0,0,0.6)] backdrop-blur-md">
+              <div className="flex justify-between items-center mb-2.5 text-xs">
+                <span className="text-zinc-200 flex items-center gap-1.5 font-bold uppercase tracking-wider">
+                  <Zap className="w-4 h-4 text-cyan-400" />
+                  SYNTHETIC MOTOR CONTROLLER
+                </span>
+                <span className="text-cyan-400 font-black font-mono">{syntheticTargetRpm} RPM TARGET</span>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <input
+                  type="range"
+                  min="0"
+                  max="450"
+                  step="5"
+                  value={syntheticTargetRpm}
+                  onChange={(e) => setSyntheticTargetRpm(parseInt(e.target.value, 10))}
+                  className="w-full h-2 accent-cyan-400 bg-zinc-800 rounded-lg cursor-pointer"
+                />
+              </div>
+
+              {/* Speed Presets */}
+              <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-xs">
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <span className="text-zinc-500 text-[11px] font-bold">Presets:</span>
+                  {[
+                    { label: 'Idle', rpm: 0 },
+                    { label: 'Breeze', rpm: 60 },
+                    { label: 'Standard', rpm: 180 },
+                    { label: 'Jet Mode', rpm: 290 },
+                    { label: 'Hadron', rpm: 390 },
+                  ].map((p) => (
+                    <button
+                      key={p.label}
+                      onClick={() => setSyntheticTargetRpm(p.rpm)}
+                      className={`px-2 py-0.5 rounded text-[11px] font-bold border transition ${
+                        syntheticTargetRpm === p.rpm
+                          ? 'bg-cyan-900 border-cyan-400 text-cyan-200 shadow-[0_0_8px_rgba(6,182,212,0.3)]'
+                          : 'bg-zinc-900 hover:bg-zinc-800 border-zinc-800 text-zinc-400'
+                      }`}
+                    >
+                      {p.label}
+                    </button>
+                  ))}
+                  <button
+                    id="stop-fan-panel-btn"
+                    onClick={handleStopFan}
+                    className="px-2.5 py-0.5 rounded text-[11px] font-black border transition bg-rose-950 border-rose-500 text-rose-300 hover:bg-rose-900 flex items-center gap-1 shadow-[0_0_8px_rgba(244,63,94,0.3)]"
+                    title="Stop fan instantly"
+                  >
+                    <Power className="w-3 h-3 text-rose-400" />
+                    <span>STOP</span>
+                  </button>
+                </div>
+
+                <div className="flex items-center gap-1.5">
+                  <span className="text-zinc-500 text-[11px] font-bold">Blades:</span>
+                  {[3, 4, 5].map((cnt) => (
+                    <button
+                      key={cnt}
+                      onClick={() => setSyntheticBladeCount(cnt)}
+                      className={`px-2 py-0.5 rounded text-[11px] font-bold border transition ${
+                        syntheticBladeCount === cnt
+                          ? 'bg-pink-950 border-pink-500 text-pink-300'
+                          : 'bg-zinc-900 hover:bg-zinc-800 border-zinc-800 text-zinc-400'
+                      }`}
+                    >
+                      {cnt}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Passenger / Leaf Picture Customizer */}
+          <div className="bg-zinc-950/95 border border-purple-950/80 rounded-xl p-5 shadow-[0_0_20px_rgba(168,85,247,0.1)] backdrop-blur-md">
+            <div className="flex flex-wrap items-center justify-between gap-2 mb-3 text-xs">
+              <div className="flex items-center gap-2 text-purple-400 font-bold uppercase tracking-wider">
+                <UserPlus className="w-4 h-4" />
+                <span>Fan Passenger / Custom Character</span>
+              </div>
+              <span className="text-[11px] text-zinc-500">Clings to outer tip of blade #0</span>
+            </div>
+
+            <div className="flex flex-wrap sm:flex-nowrap items-center gap-4 text-xs">
+              {/* Thumbnail Preview */}
+              <div className="w-14 h-14 rounded-xl bg-zinc-900 border border-purple-500/30 flex items-center justify-center overflow-hidden p-1 shrink-0 relative shadow-inner">
+                <img
+                  src={customPilotUrl}
+                  alt="Blade Passenger"
+                  className="w-full h-full object-contain"
+                />
+              </div>
+
+              <div className="flex-1 flex flex-col gap-2.5">
+                <div className="flex flex-wrap items-center gap-2">
+                  <label className="bg-purple-950 hover:bg-purple-900 border border-purple-600 text-purple-200 px-3 py-1.5 rounded-lg cursor-pointer flex items-center gap-1.5 font-bold transition shadow-[0_0_12px_rgba(168,85,247,0.2)]">
+                    <Upload className="w-3.5 h-3.5 text-purple-400" />
+                    <span>Upload Picture</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleCustomPilotUpload}
+                      className="hidden"
+                    />
+                  </label>
+
+                  <button
+                    onClick={handleResetPilotPic}
+                    className="bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-zinc-400 hover:text-zinc-200 px-2.5 py-1.5 rounded-lg transition text-[11px] font-bold"
+                  >
+                    Reset
+                  </button>
+
+                  {/* Quick Scale Presets */}
+                  <div className="flex flex-wrap items-center gap-1 bg-zinc-900/90 border border-zinc-800 p-1 rounded-lg">
+                    <span className="text-[10px] text-zinc-400 px-1 font-bold">ZOOM:</span>
+                    {[
+                      { label: '1x', scale: 1.0 },
+                      { label: '1.5x', scale: 1.5 },
+                      { label: '2.0x', scale: 2.0 },
+                      { label: '2.5x', scale: 2.5 },
+                    ].map((sz) => (
+                      <button
+                        key={sz.label}
+                        onClick={() => setPilotScale(sz.scale)}
+                        className={`px-2 py-0.5 rounded text-[10px] font-black transition ${
+                          pilotScale === sz.scale
+                            ? 'bg-purple-900 border border-purple-400 text-purple-100 shadow-[0_0_8px_rgba(168,85,247,0.4)]'
+                            : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800'
+                        }`}
+                      >
+                        {sz.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap items-center justify-between gap-3 text-[11px] text-zinc-400 pt-1.5 border-t border-zinc-900">
+                  <div className="flex items-center gap-2">
+                    <span className="text-zinc-400 font-bold">Zoom:</span>
+                    <input
+                      type="range"
+                      min="0.8"
+                      max="2.8"
+                      step="0.1"
+                      value={pilotScale}
+                      onChange={(e) => setPilotScale(parseFloat(e.target.value))}
+                      className="w-24 h-1.5 accent-purple-400 bg-zinc-800 rounded cursor-pointer"
+                    />
+                    <span className="text-purple-300 font-black text-xs">{(pilotScale * 100).toFixed(0)}%</span>
+                  </div>
+
+                  <label className="flex items-center gap-1.5 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={autoRemoveBg}
+                      onChange={(e) => setAutoRemoveBg(e.target.checked)}
+                      className="rounded bg-zinc-800 border-zinc-700 accent-purple-500"
+                    />
+                    <span>Auto-Remove Background</span>
+                  </label>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
-      {/* Global Standings & Flight Records Table */}
-      <section className="mt-8 bg-zinc-950 border border-zinc-800 rounded-lg p-4 md:p-6 shadow-[0_0_20px_rgba(0,0,0,0.5)]">
+      {/* AERODYNAMIC CLASSIFICATION MATRIX TIERS SHOWCASE */}
+      <section className="mt-8 bg-zinc-950/95 border border-zinc-800 rounded-xl p-5 shadow-[0_0_30px_rgba(0,0,0,0.7)] backdrop-blur-md">
+        <div className="flex items-center gap-2 mb-4 pb-2 border-b border-zinc-900">
+          <Layers className="w-5 h-5 text-cyan-400" />
+          <h2 className="text-sm font-black tracking-wider uppercase text-zinc-200">
+            AERODYNAMIC CLASSIFICATION MATRIX // SPEED TIERS
+          </h2>
+          <span className="text-[11px] text-zinc-500 ml-auto hidden sm:inline">
+            Spin ceiling fan faster to unlock higher relativistic classifications
+          </span>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
+          {CHARACTER_TIERS.map((tier) => {
+            const isActive = activeTier.id === tier.id;
+            return (
+              <div 
+                key={tier.id}
+                className={`p-4 rounded-xl border transition-all duration-300 flex flex-col justify-between ${
+                  isActive 
+                    ? 'bg-cyan-950/60 border-cyan-400 shadow-[0_0_20px_rgba(6,182,212,0.3)] scale-[1.02]'
+                    : 'bg-zinc-900/60 border-zinc-800/80 hover:border-zinc-700'
+                }`}
+              >
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
+                      tier.hazardLevel === 'COSMIC' ? 'bg-purple-950 text-purple-300 border border-purple-600' :
+                      tier.hazardLevel === 'CRITICAL' ? 'bg-rose-950 text-rose-300 border border-rose-600' :
+                      tier.hazardLevel === 'ELEVATED' ? 'bg-amber-950 text-amber-300 border border-amber-600' :
+                      'bg-zinc-800 text-zinc-400'
+                    }`}>
+                      {tier.hazardLevel}
+                    </span>
+                    {isActive && (
+                      <span className="text-[10px] bg-cyan-400 text-black font-black px-1.5 py-0.5 rounded-full animate-pulse">
+                        ACTIVE
+                      </span>
+                    )}
+                  </div>
+
+                  <h4 className="text-sm font-black text-zinc-100 mt-1">{tier.title}</h4>
+                  <div className="text-[11px] text-cyan-400 font-mono font-bold mt-0.5">
+                    {tier.minRpm} – {tier.maxRpm > 1000 ? '450+' : tier.maxRpm} RPM
+                  </div>
+                  <p className="text-[11px] text-zinc-400 mt-2 leading-relaxed">
+                    {tier.description}
+                  </p>
+                </div>
+
+                <div className="text-[10px] text-zinc-500 font-mono pt-2 mt-3 border-t border-zinc-800">
+                  ID: {tier.callsign}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </section>
+
+      {/* GLOBAL STANDINGS & FLIGHT RECORDS TABLE */}
+      <section className="mt-8 bg-zinc-950/95 border border-zinc-800 rounded-xl p-5 md:p-6 shadow-[0_0_30px_rgba(0,0,0,0.7)] backdrop-blur-md">
         <div className="flex flex-wrap items-center justify-between mb-4 gap-3">
           <div className="flex items-center gap-2">
             <Trophy className="w-5 h-5 text-amber-400" />
-            <h2 className="text-sm font-bold tracking-wider uppercase text-zinc-200">
+            <h2 className="text-sm font-black tracking-wider uppercase text-zinc-100">
               Global Orbital Ceiling Standings
             </h2>
+            <span className="text-[10px] bg-amber-950/80 text-amber-300 border border-amber-600/70 px-2 py-0.5 rounded-full font-bold">
+              VERIFIED FLIGHT LOG
+            </span>
           </div>
 
           <div className="flex items-center gap-2 text-xs">
             <button
               onClick={handleExportCsv}
-              className="bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 px-3 py-1.5 rounded flex items-center gap-1.5 transition text-zinc-300 font-bold"
+              className="bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 hover:border-zinc-600 px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition text-zinc-300 font-bold shadow-sm"
               title="Export Standings as CSV file"
             >
               <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-400" />
@@ -1779,7 +1892,7 @@ export default function MissionControl() {
             </button>
             <button
               onClick={handleClearStandings}
-              className="bg-zinc-900 hover:bg-rose-950/60 border border-zinc-700 hover:border-rose-600/60 px-3 py-1.5 rounded flex items-center gap-1.5 transition text-zinc-400 hover:text-rose-300 font-bold"
+              className="bg-zinc-900 hover:bg-rose-950/60 border border-zinc-700 hover:border-rose-600/60 px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition text-zinc-400 hover:text-rose-300 font-bold shadow-sm"
               title="Purge all logged missions"
             >
               <Trash2 className="w-3.5 h-3.5 text-rose-400" />
@@ -1788,38 +1901,42 @@ export default function MissionControl() {
           </div>
         </div>
 
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto rounded-lg border border-zinc-850">
           <table className="w-full text-left text-xs">
             <thead>
-              <tr className="border-b border-zinc-800 text-zinc-500 font-bold">
-                <th className="pb-2.5">FAN CODENAME</th>
-                <th className="pb-2.5">PILOT CALLSIGN</th>
-                <th className="pb-2.5">CLASSIFICATION</th>
-                <th className="pb-2.5">PEAK RPM</th>
-                <th className="pb-2.5">TIP SPEED</th>
-                <th className="pb-2.5">CENTRIPETAL G</th>
-                <th className="pb-2.5">DISPLACEMENT</th>
-                <th className="pb-2.5">RECORDED AT</th>
+              <tr className="border-b border-zinc-800 bg-zinc-900/60 text-zinc-400 font-bold">
+                <th className="py-3 px-3">RANK</th>
+                <th className="py-3 px-3">FAN CODENAME</th>
+                <th className="py-3 px-3">PILOT CALLSIGN</th>
+                <th className="py-3 px-3">CLASSIFICATION</th>
+                <th className="py-3 px-3 text-right">PEAK RPM</th>
+                <th className="py-3 px-3 text-right">TIP SPEED</th>
+                <th className="py-3 px-3 text-right">CENTRIPETAL G</th>
+                <th className="py-3 px-3 text-right">DISPLACEMENT</th>
+                <th className="py-3 px-3 text-right">RECORDED AT</th>
               </tr>
             </thead>
             <tbody id="leaderboard-body" className="divide-y divide-zinc-900">
               {leaderboard.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="py-6 text-center text-zinc-500 italic">
-                    No flight missions recorded yet. Engage telemetry and click 'Log Mission'!
+                  <td colSpan={9} className="py-8 text-center text-zinc-500 italic">
+                    No flight missions recorded yet. Engage telemetry and click 'Log Mission & Issue Flight Diploma'!
                   </td>
                 </tr>
               ) : (
-                leaderboard.map((item) => (
+                leaderboard.map((item, index) => (
                   <tr key={item.id} className="hover:bg-zinc-900/50 transition">
-                    <td className="py-2.5 font-bold text-zinc-100">{item.fanCodename}</td>
-                    <td className="py-2.5 text-zinc-400 font-mono">{item.pilotCallsign}</td>
-                    <td className="py-2.5 text-cyan-400 font-bold">{item.assignedTier}</td>
-                    <td className="py-2.5 text-zinc-300 font-bold">{item.peakRpm} RPM</td>
-                    <td className="py-2.5 text-emerald-400">{item.maxSpeedKmh} km/h</td>
-                    <td className="py-2.5 text-amber-400">{item.centripetalG ? `${item.centripetalG} G` : 'N/A'}</td>
-                    <td className="py-2.5 text-amber-300 font-bold">{item.totalDistanceKm} km</td>
-                    <td className="py-2.5 text-zinc-500">{item.recordedAt}</td>
+                    <td className="py-3 px-3 font-bold">
+                      {index === 0 ? '🥇 1' : index === 1 ? '🥈 2' : index === 2 ? '🥉 3' : `#${index + 1}`}
+                    </td>
+                    <td className="py-3 px-3 font-black text-zinc-100">{item.fanCodename}</td>
+                    <td className="py-3 px-3 text-zinc-400 font-mono">{item.pilotCallsign}</td>
+                    <td className="py-3 px-3 text-cyan-400 font-bold">{item.assignedTier}</td>
+                    <td className="py-3 px-3 text-right text-zinc-100 font-bold font-mono">{item.peakRpm} RPM</td>
+                    <td className="py-3 px-3 text-right text-emerald-400 font-mono">{item.maxSpeedKmh} km/h</td>
+                    <td className="py-3 px-3 text-right text-purple-400 font-mono">{item.centripetalG ? `${item.centripetalG} G` : 'N/A'}</td>
+                    <td className="py-3 px-3 text-right text-amber-300 font-black font-mono">{item.totalDistanceKm} km</td>
+                    <td className="py-3 px-3 text-right text-zinc-500 font-mono text-[11px]">{item.recordedAt}</td>
                   </tr>
                 ))
               )}
@@ -1830,8 +1947,8 @@ export default function MissionControl() {
 
       {/* Flight Qualification Certificate Modal */}
       {showCertificateModal && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-zinc-950 border border-cyan-500/50 rounded-xl max-w-lg w-full p-6 shadow-[0_0_40px_rgba(6,182,212,0.25)] flex flex-col gap-4">
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="bg-zinc-950 border border-cyan-500/60 rounded-2xl max-w-lg w-full p-6 shadow-[0_0_50px_rgba(6,182,212,0.3)] flex flex-col gap-4 relative animate-in fade-in zoom-in-95 duration-200">
             <div className="flex items-center justify-between pb-3 border-b border-zinc-800">
               <div className="flex items-center gap-2">
                 <Award className="w-5 h-5 text-cyan-400" />
@@ -1841,7 +1958,7 @@ export default function MissionControl() {
               </div>
               <button
                 onClick={() => setShowCertificateModal(false)}
-                className="text-zinc-500 hover:text-zinc-200 text-xs font-bold"
+                className="text-zinc-500 hover:text-zinc-200 text-xs font-bold px-2 py-1 bg-zinc-900 rounded border border-zinc-800"
               >
                 ✕ CLOSE
               </button>
@@ -1855,7 +1972,7 @@ export default function MissionControl() {
                   type="text"
                   value={pilotCallsign}
                   onChange={(e) => setPilotCallsign(e.target.value)}
-                  className="w-full bg-zinc-900 border border-zinc-700 px-3 py-2 rounded text-cyan-300 font-bold focus:outline-none focus:border-cyan-500"
+                  className="w-full bg-zinc-900 border border-zinc-700 px-3 py-2 rounded-lg text-cyan-300 font-bold focus:outline-none focus:border-cyan-500 shadow-inner"
                   placeholder="e.g. Flight Officer Babu"
                 />
               </div>
@@ -1866,48 +1983,48 @@ export default function MissionControl() {
                   type="text"
                   value={fanCodename}
                   onChange={(e) => setFanCodename(e.target.value)}
-                  className="w-full bg-zinc-900 border border-zinc-700 px-3 py-2 rounded text-zinc-200 font-bold focus:outline-none focus:border-cyan-500"
-                  placeholder="e.g. Havells Stealth Air GT-500"
+                  className="w-full bg-zinc-900 border border-zinc-700 px-3 py-2 rounded-lg text-zinc-200 font-bold focus:outline-none focus:border-cyan-500 shadow-inner"
+                  placeholder="e.g. USHA Tornado 9000-GT"
                 />
               </div>
             </div>
 
             {/* Quick Summary Preview */}
-            <div className="bg-zinc-900/70 border border-zinc-800 p-3 rounded text-xs space-y-1.5">
+            <div className="bg-zinc-900/80 border border-zinc-800 p-3.5 rounded-xl text-xs space-y-2 shadow-inner">
               <div className="flex justify-between">
-                <span className="text-zinc-500">Achieved Peak RPM:</span>
+                <span className="text-zinc-400">Achieved Peak RPM:</span>
                 <span className="font-bold text-cyan-400">{peakSessionRpm || telemetry.rpm} RPM</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-zinc-500">Max Peripheral Velocity:</span>
+                <span className="text-zinc-400">Max Peripheral Velocity:</span>
                 <span className="font-bold text-emerald-400">{telemetry.linearVelocityKmh} KM/H</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-zinc-500">Centripetal Stress:</span>
-                <span className="font-bold text-amber-400">{telemetry.centripetalG} G</span>
+                <span className="text-zinc-400">Centripetal Stress:</span>
+                <span className="font-bold text-purple-400">{telemetry.centripetalG} G</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-zinc-500">Displacement Flown:</span>
+                <span className="text-zinc-400">Displacement Flown:</span>
                 <span className="font-bold text-amber-300">{telemetry.totalDistanceMeters} Meters</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-zinc-500">Flight Classification:</span>
+                <span className="text-zinc-400">Flight Classification:</span>
                 <span className="font-bold text-zinc-200">{activeTier.title}</span>
               </div>
             </div>
 
             {/* Modal Actions */}
-            <div className="flex flex-col sm:flex-row gap-2 pt-2">
+            <div className="flex flex-col sm:flex-row gap-2.5 pt-2">
               <button
                 onClick={handleDownloadCertificate}
-                className="flex-1 bg-zinc-900 hover:bg-zinc-800 border border-amber-600/60 hover:border-amber-400 text-amber-300 py-2 rounded text-xs font-bold flex items-center justify-center gap-2 transition"
+                className="flex-1 bg-zinc-900 hover:bg-zinc-850 border border-amber-500/70 hover:border-amber-400 text-amber-300 py-2.5 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition shadow-lg"
               >
                 <Download className="w-4 h-4" />
-                <span>Download PNG Certificate</span>
+                <span>Download PNG Diploma</span>
               </button>
               <button
                 onClick={handleSaveFlight}
-                className="flex-1 bg-cyan-950 hover:bg-cyan-900 border border-cyan-500 text-cyan-200 py-2 rounded text-xs font-black flex items-center justify-center gap-2 transition shadow-[0_0_15px_rgba(6,182,212,0.3)]"
+                className="flex-1 bg-cyan-950 hover:bg-cyan-900 border border-cyan-500 text-cyan-200 py-2.5 rounded-xl text-xs font-black flex items-center justify-center gap-2 transition shadow-[0_0_20px_rgba(6,182,212,0.35)]"
               >
                 <Award className="w-4 h-4 text-cyan-400" />
                 <span>Log to Leaderboard</span>
@@ -1916,6 +2033,20 @@ export default function MissionControl() {
           </div>
         </div>
       )}
+
+      {/* Tactical Aerospace Footer */}
+      <footer className="mt-12 pt-6 border-t border-zinc-900 text-center text-xs text-zinc-500 flex flex-wrap justify-between items-center gap-4">
+        <div className="flex items-center gap-2">
+          <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+          <span>PROJECT CEILING DRIFT // AT-OFDS MISSION CONTROL</span>
+        </div>
+        <div>
+          <span>Tip: Click any blade tip on the canvas to lock the optical sensor</span>
+        </div>
+        <div className="text-zinc-600 font-mono text-[10px]">
+          SECTOR CEILING GRID // ALL TELEMETRY RECORDED IN-BROWSER
+        </div>
+      </footer>
     </main>
   );
 }
