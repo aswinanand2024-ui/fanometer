@@ -1677,30 +1677,6 @@ export default function MissionControl() {
             </div>
           </div>
 
-          {/* Aerodynamic Hazard Tier & Diploma Trigger Card */}
-          <div className="bg-zinc-950/95 border border-cyan-900/60 p-5 rounded-xl shadow-[0_0_30px_rgba(6,182,212,0.15)] relative overflow-hidden backdrop-blur-md">
-            <div className="flex items-center justify-between mb-2">
-              <div className="flex items-center gap-1.5 text-[11px] uppercase text-cyan-400 font-black tracking-wider">
-                <ShieldAlert className="w-4 h-4" />
-                <span>RATING: {activeTier.hazardLevel}</span>
-              </div>
-              <span className="text-[10px] text-zinc-500 font-mono bg-zinc-900 px-2 py-0.5 rounded border border-zinc-800">
-                CALLSIGN: {activeTier.callsign}
-              </span>
-            </div>
-            
-            <h3 id="tier-title" className="text-xl font-black text-zinc-100 tracking-wide">{activeTier.title}</h3>
-            <p className="text-xs text-zinc-400 mt-1 italic">"{activeTier.description}"</p>
-
-            <button 
-              id="log-flight-btn"
-              onClick={handleOpenCertificateModal}
-              className="mt-4 w-full bg-cyan-950 hover:bg-cyan-900 border border-cyan-500 hover:border-cyan-400 text-xs py-3 rounded-xl text-cyan-200 transition font-black flex items-center justify-center gap-2 shadow-[0_0_20px_rgba(6,182,212,0.3)] hover:scale-[1.01] active:scale-98"
-            >
-              <Award className="w-4 h-4 text-cyan-400" />
-              <span>Log Mission & Issue Flight Diploma</span>
-            </button>
-          </div>
 
           {/* Synthetic Motor Controls Deck */}
           {feedMode === 'synthetic' && (
@@ -1948,6 +1924,15 @@ export default function MissionControl() {
 
           <div className="flex items-center gap-2 text-xs">
             <button
+              id="log-flight-btn"
+              onClick={handleOpenCertificateModal}
+              className="bg-cyan-950 hover:bg-cyan-900 border border-cyan-500/70 hover:border-cyan-400 px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition text-cyan-200 font-bold shadow-sm"
+              title="Log current flight telemetry"
+            >
+              <Award className="w-3.5 h-3.5 text-cyan-400" />
+              <span>Log Flight</span>
+            </button>
+            <button
               onClick={handleExportCsv}
               className="bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 hover:border-zinc-600 px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition text-zinc-300 font-bold shadow-sm"
               title="Export Standings as CSV file"
@@ -1985,7 +1970,7 @@ export default function MissionControl() {
               {leaderboard.length === 0 ? (
                 <tr>
                   <td colSpan={9} className="py-8 text-center text-zinc-500 italic">
-                    No flight missions recorded yet. Engage telemetry and click 'Log Mission & Issue Flight Diploma'!
+                    No flight telemetry records logged yet. Run optical tracking or synthetic motor to log records.
                   </td>
                 </tr>
               ) : (
