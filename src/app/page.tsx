@@ -30,11 +30,15 @@ import {
   Layers,
   Info,
   Check,
-  Calculator
+  Calculator,
+  Clock,
+  Flag,
+  RotateCcw,
+  CheckCircle2
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
-import { KinematicsData, FlightRecord, TrackingRoi, CalibrationMode } from '@/lib/types';
+import { KinematicsData, FlightRecord, TrackingRoi, CalibrationMode, FlightDebrief } from '@/lib/types';
 import { initTrackerState, sampleRoiLuma, evaluatePulse } from '@/lib/cvEngine';
 import { calculateKinematics, calculateProjectedTrajectory } from '@/lib/kinematics';
 import { resolveTier, CHARACTER_TIERS } from '@/lib/characterMatrix';

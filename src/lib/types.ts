@@ -44,3 +44,15 @@ export interface TrackingRoi {
   y: number;
 }
 
+export interface FlightDebrief {
+  recordedSeconds: number;
+  formattedTime: string;
+  finalDistanceMeters: number;
+  finalDistanceKm: number;
+  peakRpm: number;
+  avgSpeedKmh: number;
+  totalRevolutions: number;
+  formulaExplanation: string;
+  stoppedAt: string;
+}
+
