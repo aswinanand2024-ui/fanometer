@@ -53,3 +53,65 @@ export function calculateKinematics(
   };
 }
 
+export interface ProjectedTrajectory {
+  targetHours: number;
+  linearVelocityMs: number;
+  linearVelocityKmh: number;
+  projectedDistanceMeters: number;
+  projectedDistanceKm: number;
+  projectedRotations: number;
+  formulaString: string;
+  substitutedFormula: string;
+  landmarkEquivalent: string;
+}
+
+export function calculateProjectedTrajectory(
+  diameterMeters: number,
+  currentRpm: number,
+  hours: number
+): ProjectedTrajectory {
+  const safeDiameter = Math.max(0.2, diameterMeters);
+  const safeRpm = Math.max(0, currentRpm);
+  const safeHours = Math.max(0.01, hours);
+
+  const circumference = Math.PI * safeDiameter;
+  const linearVelocityMs = (safeRpm * circumference) / 60;
+  const linearVelocityKmh = linearVelocityMs * 3.6;
+
+  const totalSeconds = safeHours * 3600;
+  const projectedDistanceMeters = linearVelocityMs * totalSeconds;
+  const projectedDistanceKm = projectedDistanceMeters / 1000;
+  const projectedRotations = Math.round(safeRpm * (safeHours * 60));
+
+  let landmarkEquivalent = 'Local room perimeter';
+  if (projectedDistanceKm > 800) {
+    landmarkEquivalent = 'Continental Highway Orbit';
+  } else if (projectedDistanceKm > 350) {
+    landmarkEquivalent = 'Intercity Express Transit';
+  } else if (projectedDistanceKm > 100) {
+    landmarkEquivalent = 'Regional Commute Trajectory';
+  } else if (projectedDistanceKm > 42) {
+    landmarkEquivalent = 'Full Marathon Distance';
+  } else if (projectedDistanceKm > 10) {
+    landmarkEquivalent = 'Cross-City Aerodynamic Glide';
+  } else if (projectedDistanceKm > 1) {
+    landmarkEquivalent = 'Multiple Campus Laps';
+  }
+
+  const formulaString = 'd = v · t = ((RPM · π · D) / 60) · t';
+  const substitutedFormula = `d = ((${safeRpm} · 3.14 · ${safeDiameter.toFixed(1)}m) / 60) · ${Math.round(totalSeconds)}s = ${projectedDistanceKm.toFixed(2)} km`;
+
+  return {
+    targetHours: safeHours,
+    linearVelocityMs: Number(linearVelocityMs.toFixed(2)),
+    linearVelocityKmh: Number(linearVelocityKmh.toFixed(1)),
+    projectedDistanceMeters: Number(projectedDistanceMeters.toFixed(1)),
+    projectedDistanceKm: Number(projectedDistanceKm.toFixed(2)),
+    projectedRotations,
+    formulaString,
+    substitutedFormula,
+    landmarkEquivalent,
+  };
+}
+
+

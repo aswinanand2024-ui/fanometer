@@ -29,13 +29,14 @@ import {
   UserPlus,
   Layers,
   Info,
-  Check
+  Check,
+  Calculator
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
 import { KinematicsData, FlightRecord, TrackingRoi, CalibrationMode } from '@/lib/types';
 import { initTrackerState, sampleRoiLuma, evaluatePulse } from '@/lib/cvEngine';
-import { calculateKinematics } from '@/lib/kinematics';
+import { calculateKinematics, calculateProjectedTrajectory } from '@/lib/kinematics';
 import { resolveTier, CHARACTER_TIERS } from '@/lib/characterMatrix';
 import { getPersistedStandings, saveFlightRecord, clearStandings, exportStandingsCsv } from '@/lib/storage';
 import { missionAudio } from '@/lib/soundFx';
@@ -106,6 +107,9 @@ export default function MissionControl() {
   const [calCenter, setCalCenter] = useState<{ x: number; y: number } | null>(null);
   const [calTip, setCalTip] = useState<{ x: number; y: number } | null>(null);
   const [calRadiusPx, setCalRadiusPx] = useState<number | null>(null);
+
+  // Mathematical Projected Distance State
+  const [projectionHours, setProjectionHours] = useState<number>(1.0);
 
   // Audio Controls
   const [audioEnabled, setAudioEnabled] = useState<boolean>(true);
@@ -903,6 +907,9 @@ export default function MissionControl() {
     return `${h > 0 ? `${h.toString().padStart(2, '0')}:` : ''}${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
   };
 
+  // Real-time Mathematical Trajectory Projection
+  const projectedTrajectory = calculateProjectedTrajectory(bladeDiameter, telemetry.rpm, projectionHours);
+
   return (
     <main className="min-h-screen bg-[#030712] text-zinc-100 p-3 sm:p-5 md:p-6 lg:p-8 font-mono select-none hud-grid relative">
       {/* Top Aerospace Mission Command Header */}
@@ -1197,23 +1204,81 @@ export default function MissionControl() {
           </div>
         </div>
 
-        {/* Metric 3: Pointless Odometry Distance */}
-        <div className="bg-zinc-950/90 border border-amber-900/60 p-4 rounded-xl shadow-[0_0_20px_rgba(245,158,11,0.12)] relative overflow-hidden corner-brackets">
-          <div className="flex justify-between items-center text-zinc-400 mb-1">
-            <span className="text-[11px] uppercase tracking-wider font-bold flex items-center gap-1.5">
-              <Compass className="w-3.5 h-3.5 text-amber-400" />
-              POINTLESS ODOMETRY
+        {/* Metric 3: Projected Distance & Mathematical Trajectory Analysis */}
+        <div className="bg-zinc-950/90 border border-amber-500/70 p-4 rounded-xl shadow-[0_0_25px_rgba(245,158,11,0.18)] relative overflow-hidden corner-brackets">
+          {/* Card Header & Quick Time Window Selector */}
+          <div className="flex justify-between items-center text-zinc-400 mb-1 flex-wrap gap-1">
+            <span className="text-[11px] uppercase tracking-wider font-black flex items-center gap-1.5 text-amber-300">
+              <Calculator className="w-3.5 h-3.5 text-amber-400" />
+              PROJECTED DISTANCE
             </span>
-            <span className="text-[10px] text-amber-400/80 font-bold">
-              {telemetry.cumulativeRotations} REVS
+            <div className="flex items-center gap-1">
+              {[
+                { label: '15m', hrs: 0.25 },
+                { label: '1h', hrs: 1.0 },
+                { label: '8h', hrs: 8.0 },
+                { label: '24h', hrs: 24.0 },
+              ].map((t) => (
+                <button
+                  key={t.label}
+                  onClick={() => setProjectionHours(t.hrs)}
+                  className={`px-1.5 py-0.5 rounded text-[9px] font-bold border transition ${
+                    projectionHours === t.hrs
+                      ? 'bg-amber-950 border-amber-400 text-amber-200 shadow-[0_0_6px_rgba(245,158,11,0.4)]'
+                      : 'bg-zinc-900 border-zinc-800 text-zinc-500 hover:text-zinc-300'
+                  }`}
+                  title={`Calculate projected distance for ${t.label}`}
+                >
+                  {t.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Big Hero Projected Distance Readout */}
+          <div className="my-1">
+            <div className="flex items-baseline gap-1">
+              <span className="text-3xl sm:text-4xl lg:text-5xl font-black text-amber-400 text-glow-amber tracking-tight">
+                {projectedTrajectory.projectedDistanceKm >= 1
+                  ? projectedTrajectory.projectedDistanceKm.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 2 })
+                  : projectedTrajectory.projectedDistanceMeters.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+              </span>
+              <span className="text-xs text-amber-300/80 font-bold uppercase">
+                {projectedTrajectory.projectedDistanceKm >= 1 ? 'KM' : 'M'}
+              </span>
+            </div>
+            <div className="text-[10px] text-zinc-400 font-bold flex items-center justify-between mt-0.5">
+              <span>
+                WILL COVER IN {projectionHours >= 1 ? `${projectionHours} HR${projectionHours > 1 ? 'S' : ''}` : `${Math.round(projectionHours * 60)} MINS`}
+              </span>
+              <span className="text-amber-400/90 font-mono">
+                ~{projectedTrajectory.projectedRotations.toLocaleString()} REVS
+              </span>
+            </div>
+          </div>
+
+          {/* Mathematical Formula Display Box */}
+          <div className="mt-2 pt-2 border-t border-zinc-850 bg-black/60 p-2 rounded-lg border border-amber-950/80 text-[10px] font-mono">
+            <div className="text-zinc-400 font-bold flex items-center justify-between text-[9px] uppercase tracking-wider text-amber-400/90 mb-1">
+              <span>MATH FORMULA</span>
+              <span className="text-zinc-500">d = v · t</span>
+            </div>
+            <div className="text-zinc-300 font-bold text-[10px] leading-tight">
+              d = ((RPM · π · D) / 60) · t
+            </div>
+            <div className="text-[9px] text-emerald-400/90 truncate mt-1">
+              d = (({telemetry.rpm} · 3.14 · {bladeDiameter}m) / 60) · {Math.round(projectionHours * 3600)}s
+            </div>
+          </div>
+
+          {/* Subtext: Real-world equivalent & Odometry so far */}
+          <div className="mt-2 text-[10px] text-zinc-400 flex items-center justify-between font-bold">
+            <span className="text-zinc-500 truncate">
+              📍 {projectedTrajectory.landmarkEquivalent}
             </span>
-          </div>
-          <div className="text-3xl sm:text-4xl lg:text-5xl font-black text-amber-400 text-glow-amber tracking-tight my-1">
-            {telemetry.totalDistanceMeters.toLocaleString()}
-            <span className="text-xs text-zinc-400 ml-1 font-normal">M</span>
-          </div>
-          <div className="text-[10px] text-zinc-400 font-bold mt-1">
-            {telemetry.totalDistanceKm} KM FLOWN IN PLACE
+            <span className="text-zinc-500 font-mono text-[9px]">
+              Odo: {telemetry.totalDistanceKm}km
+            </span>
           </div>
         </div>
 
