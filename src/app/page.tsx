@@ -149,6 +149,16 @@ export default function MissionControl() {
   const [systemStatus, setSystemStatus] = useState<string>('SYNTHETIC MATRIX ONLINE');
   const [pulseDetectedFlash, setPulseDetectedFlash] = useState<boolean>(false);
 
+  // Flight Debrief & Final Distance Summary State
+  const [flightDebrief, setFlightDebrief] = useState<FlightDebrief | null>(null);
+  const [showDebriefModal, setShowDebriefModal] = useState<boolean>(false);
+
+  // High-precision live odometry & frame refs
+  const cumRotationsRef = useRef<number>(0);
+  const lastFrameTimeRef = useRef<number>(performance.now());
+  const lastTelemetryUpdateRef = useRef<number>(0);
+  const lastPulseTimeRef = useRef<number>(performance.now());
+
   // Certificate Modal State
   const [showCertificateModal, setShowCertificateModal] = useState<boolean>(false);
   const [pilotCallsign, setPilotCallsign] = useState<string>('Specialist Babu');
@@ -169,15 +179,11 @@ export default function MissionControl() {
     try {
       const imgData = offCtx.getImageData(0, 0, offCanvas.width, offCanvas.height);
       const d = imgData.data;
-      const bgR = d[0];
-      const bgG = d[1];
-      const bgB = d[2];
-
       for (let i = 0; i < d.length; i += 4) {
         const r = d[i];
         const g = d[i + 1];
         const b = d[i + 2];
-        const dist = Math.hypot(r - bgR, g - bgG, b - bgB);
+        const dist = Math.sqrt((r - 255) ** 2 + (g - 255) ** 2 + (b - 255) ** 2);
         if (dist < 46) {
           d[i + 3] = 0;
         } else if (dist < 64) {
@@ -191,17 +197,65 @@ export default function MissionControl() {
     }
   };
 
-  // Stop Fan / Emergency Brake Handler
+  // Stop Fan / Emergency Brake & Debrief Handler
   const handleStopFan = () => {
+    const recordedTime = missionElapsedTime;
+    const finalDistM = telemetry.totalDistanceMeters;
+    const finalDistKm = telemetry.totalDistanceKm;
+    const peakRpm = peakSessionRpm || telemetry.rpm;
+    const totalRevs = Math.round(cumRotationsRef.current || telemetry.cumulativeRotations);
+    const avgSpeedKmh = recordedTime > 0 ? Number(((finalDistM / recordedTime) * 3.6).toFixed(1)) : 0;
+    const avgSpeedMs = recordedTime > 0 ? Number((finalDistM / recordedTime).toFixed(2)) : 0;
+
+    // Build session debrief report if the fan was active
+    if (finalDistM > 0 || recordedTime > 0 || peakRpm > 0) {
+      const debrief: FlightDebrief = {
+        recordedSeconds: recordedTime,
+        formattedTime: `${Math.floor(recordedTime / 60).toString().padStart(2, '0')}:${(recordedTime % 60).toString().padStart(2, '0')}`,
+        finalDistanceMeters: Number(finalDistM.toFixed(1)),
+        finalDistanceKm: Number(finalDistKm.toFixed(3)),
+        peakRpm,
+        avgSpeedKmh,
+        totalRevolutions: totalRevs,
+        formulaExplanation: `d = N × (π × D) = ${totalRevs} revs × (3.1416 × ${bladeDiameter}m) = ${finalDistM.toFixed(1)} meters (Time check: v_avg × t = ${avgSpeedMs} m/s × ${recordedTime}s = ${finalDistM.toFixed(1)} m)`,
+        stoppedAt: new Date().toLocaleTimeString(),
+      };
+      setFlightDebrief(debrief);
+      setShowDebriefModal(true);
+
+      // Voice Audio Announcement
+      if (typeof window !== 'undefined' && 'speechSynthesis' in window && audioEnabled) {
+        try {
+          window.speechSynthesis.cancel();
+          const utterance = new SpeechSynthesisUtterance(
+            `Flight recorded. Time: ${recordedTime} seconds. Final distance: ${Math.round(finalDistM)} meters.`
+          );
+          utterance.rate = 1.05;
+          window.speechSynthesis.speak(utterance);
+        } catch {
+          // Audio policy catch
+        }
+      }
+
+      missionAudio.playMissionLoggedChime();
+      confetti({ particleCount: 85, spread: 70, origin: { y: 0.6 } });
+    }
+
+    // RESET ALL RUNNING VALUES TO ZERO FOR THE NEXT RUN
     setSyntheticTargetRpm(0);
     syntheticCurrentRpmRef.current = 0;
-    setTelemetry((prev) => calculateKinematics(bladeDiameter, prev.cumulativeRotations, 0));
+    cumRotationsRef.current = 0;
+    setMissionElapsedTime(0);
+    setPeakSessionRpm(0);
+    setHistoryRpm([]);
+    setTelemetry(calculateKinematics(bladeDiameter, 0, 0));
     missionAudio.stopTurbineDrone();
+
     if (videoRef.current && !videoRef.current.paused) {
       videoRef.current.pause();
       setIsProcessing(false);
     }
-    setSystemStatus('FAN STOPPED // BRAKE ENGAGED');
+    setSystemStatus('FAN STOPPED // DEBRIEF RECORDED & ZEROED');
   };
 
   // Custom Pilot/Leaf Picture Upload Handlers
@@ -388,6 +442,10 @@ export default function MissionControl() {
         let pilotRadius = 126;
         let activeRpm = 0;
 
+        const now = performance.now();
+        const dt = Math.min(0.1, (now - lastFrameTimeRef.current) / 1000);
+        lastFrameTimeRef.current = now;
+
         if (feedMode === 'synthetic') {
           // Synthetic Simulation Rendering
           ctx.fillStyle = '#030712';
@@ -404,9 +462,11 @@ export default function MissionControl() {
           }
 
           // Smooth rotational inertia
-          const targetRadSpeed = (syntheticTargetRpm * 2 * Math.PI) / 3600; // per frame at 60fps
-          const currentRadSpeed = (syntheticCurrentRpmRef.current * 2 * Math.PI) / 3600;
           syntheticCurrentRpmRef.current += (syntheticTargetRpm - syntheticCurrentRpmRef.current) * 0.05;
+          if (syntheticTargetRpm === 0 && syntheticCurrentRpmRef.current < 0.5) {
+            syntheticCurrentRpmRef.current = 0;
+          }
+          const currentRadSpeed = (syntheticCurrentRpmRef.current * 2 * Math.PI) / 3600;
           syntheticAngleRef.current += currentRadSpeed;
 
           // Draw rotating hub & blades
@@ -456,7 +516,25 @@ export default function MissionControl() {
 
           blade0Angle = syntheticAngleRef.current + bladeStep;
           pilotRadius = 126;
-          activeRpm = syntheticCurrentRpmRef.current || telemetry.rpm || 0;
+          activeRpm = syntheticCurrentRpmRef.current;
+
+          // Smooth distance accumulation & live speedometer synchronization
+          if (activeRpm > 0) {
+            cumRotationsRef.current += (activeRpm / 60) * dt;
+            missionAudio.updateTurbineDrone(activeRpm);
+          } else {
+            missionAudio.stopTurbineDrone();
+          }
+
+          // Live throttle telemetry updates for smooth real-time reading
+          if (now - lastTelemetryUpdateRef.current > 33) {
+            lastTelemetryUpdateRef.current = now;
+            setTelemetry(calculateKinematics(bladeDiameter, cumRotationsRef.current, activeRpm));
+            if (activeRpm > 0) {
+              setHistoryRpm((h) => [...h.slice(-30), Math.round(activeRpm)]);
+              setPeakSessionRpm((p) => Math.max(p, Math.round(activeRpm)));
+            }
+          }
         } else if ((feedMode === 'camera' || feedMode === 'upload') && video && video.readyState >= 2) {
           ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
@@ -464,6 +542,15 @@ export default function MissionControl() {
           blade0Angle = videoAngleRef.current;
           pilotRadius = roi ? Math.hypot(roi.x - cx, roi.y - cy) : 126;
           activeRpm = telemetry.rpm || 0;
+
+          // Camera/Upload Optical Decay: If no pulse detected for 1.2s, fan stopped!
+          if (now - lastPulseTimeRef.current > 1200 && telemetry.rpm > 0) {
+            const decayedRpm = Math.max(0, Math.round(telemetry.rpm * 0.8));
+            setTelemetry(calculateKinematics(bladeDiameter, cumRotationsRef.current, decayedRpm));
+            if (decayedRpm === 0) {
+              missionAudio.stopTurbineDrone();
+            }
+          }
         } else {
           // Clear canvas cleanly when waiting for video or camera stream
           ctx.fillStyle = '#030712';
@@ -473,7 +560,6 @@ export default function MissionControl() {
         // Optical Pulse Evaluation (Sampled BEFORE rendering pilot overlay to prevent interference)
         if (roi && isProcessing) {
           const luma = sampleRoiLuma(ctx, roi, boxSize);
-          const now = performance.now();
           const { isDetected, instantRpm } = evaluatePulse(
             luma, 
             trackerRef.current, 
@@ -490,6 +576,7 @@ export default function MissionControl() {
           setRecentLumaHistory([...trackerRef.current.lumaHistory]);
 
           if (isDetected) {
+            lastPulseTimeRef.current = now;
             if (feedMode !== 'synthetic' && roi) {
               videoAngleRef.current = Math.atan2(roi.y - cy, roi.x - cx);
             }
@@ -498,14 +585,16 @@ export default function MissionControl() {
             setPulseDetectedFlash(true);
             setTimeout(() => setPulseDetectedFlash(false), 90);
 
-            setTelemetry((prev) => {
-              const currentRpm = (instantRpm && instantRpm < 1500) ? instantRpm : prev.rpm;
+            if (feedMode !== 'synthetic') {
+              const revInc = 1 / (calibrationMode === 'symmetrical_blades' ? Math.max(1, bladeCount) : 1);
+              cumRotationsRef.current += revInc;
+              const currentRpm = (instantRpm && instantRpm < 1500) ? instantRpm : telemetry.rpm;
+              setTelemetry(calculateKinematics(bladeDiameter, cumRotationsRef.current, currentRpm));
               if (currentRpm > 0) {
                 setHistoryRpm((h) => [...h.slice(-30), currentRpm]);
                 setPeakSessionRpm((p) => Math.max(p, currentRpm));
               }
-              return calculateKinematics(bladeDiameter, prev.cumulativeRotations + 1, currentRpm);
-            });
+            }
           }
         }
 
@@ -706,6 +795,28 @@ export default function MissionControl() {
     missionAudio.playMissionLoggedChime();
     confetti({ particleCount: 85, spread: 70, origin: { y: 0.7 } });
     setShowCertificateModal(false);
+  };
+
+  // Save Flight from Debrief Modal directly to Leaderboard
+  const handleSaveDebriefFlight = () => {
+    if (!flightDebrief) return;
+    const record: FlightRecord = {
+      id: `FLIGHT-${Date.now().toString().slice(-4)}`,
+      fanCodename: fanCodename || 'Ceiling Cruiser Alpha',
+      pilotCallsign: pilotCallsign || 'Specialist Babu',
+      peakRpm: flightDebrief.peakRpm,
+      maxSpeedKmh: Number(((flightDebrief.peakRpm * Math.PI * bladeDiameter) / 60 * 3.6).toFixed(1)),
+      totalDistanceKm: flightDebrief.finalDistanceKm,
+      assignedTier: activeTier.title,
+      recordedAt: new Date().toISOString().replace('T', ' ').slice(0, 16),
+      centripetalG: Number((Math.pow((2 * Math.PI * Math.max(1, flightDebrief.peakRpm)) / 60, 2) * (bladeDiameter / 2) / 9.80665).toFixed(1)),
+      durationSeconds: flightDebrief.recordedSeconds,
+    };
+    const updated = saveFlightRecord(record);
+    setLeaderboard(updated);
+    missionAudio.playMissionLoggedChime();
+    confetti({ particleCount: 85, spread: 70, origin: { y: 0.6 } });
+    setShowDebriefModal(false);
   };
 
   // Download High-Resolution Flight Certificate as PNG
@@ -2120,6 +2231,127 @@ export default function MissionControl() {
           </table>
         </div>
       </section>
+
+      {/* Session Flight Debrief & Final Distance Modal */}
+      {showDebriefModal && flightDebrief && (
+        <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="bg-zinc-950 border border-amber-500/80 rounded-2xl max-w-lg w-full p-6 shadow-[0_0_60px_rgba(245,158,11,0.25)] flex flex-col gap-4 relative animate-in fade-in zoom-in-95 duration-200">
+            {/* Header */}
+            <div className="flex items-center justify-between pb-3 border-b border-zinc-800">
+              <div className="flex items-center gap-2.5">
+                <div className="p-1.5 rounded-lg bg-amber-950/80 border border-amber-500/60 text-amber-400 shadow-inner">
+                  <Flag className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-black text-sm uppercase tracking-wider text-zinc-100 flex items-center gap-1.5">
+                    <span>FLIGHT DEBRIEF // FINAL RESULTS</span>
+                    <span className="w-2 h-2 rounded-full bg-rose-500 animate-ping" />
+                  </h3>
+                  <p className="text-[10px] text-zinc-400 font-mono">STOPPED AT {flightDebrief.stoppedAt} // SENSORS ZEROED</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowDebriefModal(false)}
+                className="text-zinc-400 hover:text-zinc-100 text-xs font-bold px-2.5 py-1 bg-zinc-900 rounded-lg border border-zinc-800 hover:border-zinc-700 transition"
+              >
+                ✕ CLOSE
+              </button>
+            </div>
+
+            {/* Notification Banner */}
+            <div className="bg-amber-950/30 border border-amber-500/40 p-3 rounded-xl flex items-center gap-3">
+              <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
+              <div className="text-xs text-zinc-300">
+                <span className="text-amber-300 font-bold block">Fan motion stopped &amp; telemetry reset to zero.</span>
+                Here are the exact recorded session time and final distance reached:
+              </div>
+            </div>
+
+            {/* Core Results: Recorded Time & Final Distance */}
+            <div className="grid grid-cols-2 gap-3">
+              {/* Recorded Time */}
+              <div className="bg-zinc-900/90 border border-zinc-800 p-4 rounded-xl shadow-inner">
+                <div className="flex items-center gap-1.5 text-zinc-400 text-[10px] uppercase font-bold tracking-wider mb-1">
+                  <Clock className="w-3.5 h-3.5 text-cyan-400" />
+                  <span>RECORDED TIME</span>
+                </div>
+                <div className="text-3xl font-black text-cyan-300 font-mono text-glow-cyan tracking-tight">
+                  {flightDebrief.formattedTime}
+                </div>
+                <div className="text-[10px] text-zinc-500 font-mono mt-0.5">
+                  {flightDebrief.recordedSeconds} SECONDS TOTAL
+                </div>
+              </div>
+
+              {/* Final Distance Reached */}
+              <div className="bg-amber-950/25 border border-amber-500/40 p-4 rounded-xl shadow-inner">
+                <div className="flex items-center gap-1.5 text-amber-300 text-[10px] uppercase font-bold tracking-wider mb-1">
+                  <Compass className="w-3.5 h-3.5 text-amber-400" />
+                  <span>FINAL DISTANCE REACHED</span>
+                </div>
+                <div className="text-3xl font-black text-amber-400 font-mono text-glow-amber tracking-tight">
+                  {flightDebrief.finalDistanceMeters >= 1000
+                    ? `${flightDebrief.finalDistanceKm} KM`
+                    : `${flightDebrief.finalDistanceMeters} M`}
+                </div>
+                <div className="text-[10px] text-amber-300/80 font-mono mt-0.5">
+                  {flightDebrief.finalDistanceMeters} METERS TRAVERSED
+                </div>
+              </div>
+            </div>
+
+            {/* Secondary Telemetry Strip */}
+            <div className="grid grid-cols-3 gap-2 text-center text-xs">
+              <div className="bg-zinc-900/80 border border-zinc-800 p-2.5 rounded-lg">
+                <div className="text-[9px] text-zinc-500 font-bold uppercase">PEAK SPEED</div>
+                <div className="text-sm font-black text-zinc-100 font-mono mt-0.5">{flightDebrief.peakRpm} RPM</div>
+              </div>
+              <div className="bg-zinc-900/80 border border-zinc-800 p-2.5 rounded-lg">
+                <div className="text-[9px] text-zinc-500 font-bold uppercase">AVG VELOCITY</div>
+                <div className="text-sm font-black text-emerald-400 font-mono mt-0.5">{flightDebrief.avgSpeedKmh} KM/H</div>
+              </div>
+              <div className="bg-zinc-900/80 border border-zinc-800 p-2.5 rounded-lg">
+                <div className="text-[9px] text-zinc-500 font-bold uppercase">TOTAL ROTATIONS</div>
+                <div className="text-sm font-black text-purple-300 font-mono mt-0.5">{flightDebrief.totalRevolutions} REVS</div>
+              </div>
+            </div>
+
+            {/* Mathematical Kinematics Calculation Breakdown */}
+            <div className="bg-black/90 border border-amber-500/30 p-3.5 rounded-xl font-mono text-xs space-y-1.5 shadow-inner">
+              <div className="text-[10px] text-amber-400 font-bold uppercase tracking-wider flex items-center justify-between border-b border-zinc-800 pb-1">
+                <span>MATHEMATICAL CALCULATION</span>
+                <span className="text-zinc-500">d = N · (π · D)</span>
+              </div>
+              <div className="text-[11px] text-zinc-300 font-bold break-words">
+                {flightDebrief.formulaExplanation}
+              </div>
+              <div className="text-[10px] text-zinc-400 pt-0.5">
+                Calculated across fan diameter <span className="text-cyan-300 font-bold">{bladeDiameter}m</span> over <span className="text-amber-300 font-bold">{flightDebrief.recordedSeconds} seconds</span>.
+              </div>
+            </div>
+
+            {/* Modal Actions */}
+            <div className="flex flex-col sm:flex-row gap-2.5 pt-2">
+              <button
+                onClick={() => {
+                  handleSaveDebriefFlight();
+                }}
+                className="flex-1 bg-cyan-950 hover:bg-cyan-900 border border-cyan-500 text-cyan-200 py-3 rounded-xl text-xs font-black flex items-center justify-center gap-2 transition shadow-[0_0_20px_rgba(6,182,212,0.35)]"
+              >
+                <Trophy className="w-4 h-4 text-cyan-400" />
+                <span>Log to Standings Table</span>
+              </button>
+              <button
+                onClick={() => setShowDebriefModal(false)}
+                className="flex-1 bg-zinc-900 hover:bg-zinc-850 border border-zinc-700 text-zinc-300 py-3 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition"
+              >
+                <RotateCcw className="w-4 h-4 text-emerald-400" />
+                <span>Start Next Run</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Flight Qualification Certificate Modal */}
       {showCertificateModal && (
